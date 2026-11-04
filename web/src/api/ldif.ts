@@ -36,13 +36,12 @@ async function parseError(bodyText: string, httpStatus: number, traceId: string)
   try {
     const j = JSON.parse(bodyText)
     if (typeof j.message === 'string' && j.message) return j.message
-    if (typeof j.trace_id === 'string' && j.trace_id) {
-      return `HTTP ${httpStatus}（trace_id=${j.trace_id}）`
-    }
+    const tid = (typeof j.trace_id === 'string' && j.trace_id) || traceId
+    return `HTTP ${httpStatus}（trace_id=${tid}）`
   } catch {
     // 不是 JSON，直接用 HTTP 状态码兜底
   }
-  return `HTTP ${httpStatus}`
+  return `HTTP ${httpStatus}（trace_id=${traceId}）`
 }
 
 /**

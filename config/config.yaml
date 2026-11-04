@@ -1,0 +1,24 @@
+server:
+  port: 8080
+  mode: release
+
+database:
+  path: ./data/goldapadmin.db
+
+jwt:
+  secret: goldapadmin-secret-key-change-me
+  ttl: 24
+
+log:
+  level: info
+
+# 安全相关配置（生产环境务必检查）
+security:
+  # 是否全局默认跳过 LDAP TLS 证书校验（生产建议 false）
+  # 单个 LdapServer 记录的 skip_tls_verify 字段优先于此值
+  skip_tls_verify: false
+  cors:
+    # 允许跨域的 Origin 白名单；留空 = 只允许同源请求
+    # 开发环境可放开：["http://localhost:5173", "http://127.0.0.1:5173"]
+    # 生产环境必须指定具体域名，禁止 ["*"]
+    origins: []

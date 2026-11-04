@@ -1,0 +1,34 @@
+# =============================================================================
+# GoLDAPAdmin — 内网环境安全配置示例（IP 段访问 + 自签名证书）
+# -----------------------------------------------------------------------------
+# 适用于不对外暴露、仅公司内网办公区/VPN 可达的场景：
+#   - LDAP 服务器使用自建 CA 签发的证书
+#   - 通过内网域名或 VIP 访问
+#   - 安全策略介于开发与公网生产之间
+# =============================================================================
+
+server:
+  port: 8080
+  mode: release
+
+database:
+  path: /data/goldapadmin/goldapadmin.db
+
+jwt:
+  # 内网环境密钥至少 24 字节随机；建议同样用 openssl rand 生成
+  secret: INTERNAL_SECRET_REPLACE_ME_WITH_OPENSSL_RAND_XXXXXXXXXXXXXXXXXXXXXXXXX
+  ttl: 8                                # 内网场景 JWT 有效期可短一些
+
+log:
+  level: info
+
+security:
+  # 内网自建 CA 无法被系统信任时，可全局允许跳过校验
+  # 更推荐：将自建 CA 根证书导入服务器系统信任库，然后设为 false
+  skip_tls_verify: true
+
+  cors:
+    # 内网办公网域名 / VIP
+    origins:
+      - "https://ldapadmin.intranet.company.com"
+      - "http://10.10.20.100:8080"

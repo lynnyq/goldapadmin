@@ -1,0 +1,1 @@
+import{n as e}from"./_plugin-vue_export-helper-CkhdMA7c.js";function t(){return e({url:`/bookmarks`,method:`get`})}function n(t){return e({url:`/bookmarks`,method:`post`,data:t})}function r(t){return e({url:`/bookmarks/${t}`,method:`delete`})}export{r as n,t as r,n as t};

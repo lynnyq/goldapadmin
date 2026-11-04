@@ -1,0 +1,45 @@
+# =============================================================================
+# GoLDAPAdmin — 生产环境安全配置示例（HTTPS 公网部署）
+# -----------------------------------------------------------------------------
+# 部署 checklist（务必在上线前逐项确认）：
+#   [ ] JWT secret 替换为 32 字节以上随机值
+#   [ ] CORS origins 仅列公司域名，禁止 "*"
+#   [ ] skip_tls_verify 设为 false，LDAP 证书为正式 CA 签发
+#   [ ] 数据库文件权限 chmod 600
+#   [ ] HTTPS 由 Nginx / Caddy / Kubernetes Ingress 终结，开启 HSTS
+#   [ ] 日志级别 info 或 warn，debug 关闭
+#   [ ] 服务器防火墙仅开放 80/443（或仅 443）
+#
+# 生成随机 JWT secret：
+#   openssl rand -base64 48
+# =============================================================================
+
+server:
+  port: 8080                            # 监听内网，公网访问由反向代理终结
+  mode: release
+
+database:
+  path: /var/lib/goldapadmin/goldapadmin.db
+
+jwt:
+  # ⚠️ 上线前必须替换
+  #   openssl rand -base64 48
+  secret: REPLACE_WITH_OPENSSL_RAND_BASE64_VALUE_MINUS_48_BYTES_XXXXXXXXXXXXXXXXXXXXXXXXX
+  ttl: 12                               # 小时；默认 12h，与安全合规策略对齐
+
+log:
+  level: info
+
+security:
+  # 🔒 生产强制校验 LDAP TLS 证书
+  # 如果 LDAP 使用 AD / 正规 CA 签发证书，此项必须为 false
+  # 只有在 LDAP 使用自签名证书且临时无法替换时，才允许在单个 LdapServer 记录上开启 skip_tls_verify
+  skip_tls_verify: false
+
+  cors:
+    # 🔒 只允许公司正式域名；禁止 ["*"]
+    # 反向代理转发时 Origin 应为浏览器实际访问的域名，例如：
+    #   https://ldapadmin.company.com
+    origins:
+      - "https://ldapadmin.company.com"
+      # - "https://admin.company.com"

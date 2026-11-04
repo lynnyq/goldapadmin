@@ -1,0 +1,38 @@
+# =============================================================================
+# GoLDAPAdmin — 开发环境安全配置示例
+# -----------------------------------------------------------------------------
+# 适用于本地开发 / 内网测试机。宽松但有底线：
+#   - CORS 放开 localhost 开发服务器
+#   - TLS 可跳过（开发 LDAP 常用自签名证书）
+#   - JWT 密钥可以简单一些，但生产必须替换
+# =============================================================================
+
+server:
+  port: 8080
+  mode: debug                          # debug / release / test
+
+database:
+  path: ./data/goldapadmin.db
+
+jwt:
+  # 开发环境可简单；部署前务必用 openssl rand 生成随机值替换
+  secret: dev-secret-not-for-production-xxxxxxxxxxxxx
+  ttl: 24                              # 小时
+
+log:
+  level: debug
+
+security:
+  # 开发 LDAP 服务通常用自签名证书，允许跳过校验
+  # 生产环境切换为 false
+  skip_tls_verify: true
+
+  cors:
+    # 前端 Vite / 开发服务器
+    origins:
+      - "http://localhost:5173"
+      - "http://127.0.0.1:5173"
+      - "http://localhost:3000"
+      - "http://127.0.0.1:3000"
+      # 若前端通过反向代理（如 http://localhost:8080/admin）
+      # 则不需要单独加，因为同源请求不触发 CORS

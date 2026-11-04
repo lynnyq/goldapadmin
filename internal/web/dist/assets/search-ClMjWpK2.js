@@ -1,0 +1,1 @@
+import{n as e}from"./_plugin-vue_export-helper-CkhdMA7c.js";function t(t){let{attributes:n,...r}=t;return e({url:`/search`,method:`get`,params:r,paramsSerializer:{serialize:e=>{let t=new URLSearchParams;for(let[n,r]of Object.entries(e))r!=null&&r!==``&&t.append(n,String(r));if(n)for(let e of n)t.append(`attributes`,e);return t.toString()}}})}export{t};

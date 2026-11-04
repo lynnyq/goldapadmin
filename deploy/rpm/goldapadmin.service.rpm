@@ -1,0 +1,53 @@
+[Unit]
+Description=GoLDAPAdmin - LDAP Directory Management Tool
+Documentation=https://github.com/lynnyq/goldapadmin
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# ---- 用户与权限 ----
+# RPM %post 中已创建系统用户 ldap
+User=ldap
+Group=ldap
+
+# 工作目录（SQLite 文件和 data/ 相对路径基于此）
+WorkingDirectory=/appdata/goldapadmin
+
+# 启动命令
+ExecStart=/appdata/goldapadmin/goldapadmin /appdata/goldapadmin/config/config.yaml
+
+# 重启策略: 进程异常退出后自动重启
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# ---- 进程保护（生产安全加固） ----
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/appdata/goldapadmin/data /var/log/goldapadmin
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectMounts=true
+PrivateTmp=true
+PrivateDevices=true
+LimitNOFILE=65536
+LimitNPROC=4096
+LimitCORE=0
+ProtectClock=true
+ProtectHostname=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+
+# ---- 日志 ----
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=goldapadmin
+
+[Install]
+WantedBy=multi-user.target

@@ -3,7 +3,7 @@
 > 版本：0.1.0 · 更新：2026-11-04
 > 目标平台：RHEL 8 / RHEL 9 / CentOS Stream / Rocky / AlmaLinux / Fedora
 > 架构：x86_64（amd64）+ aarch64（arm64，如鲲鹏 / 树莓派 4 / AWS Graviton）
-> 运行账户：**ldap**（系统用户，UID 55，GID 55，无登录 shell）
+> 运行账户：**ldap**（系统用户，`/usr/sbin/nologin`；UID/GID 由系统自动分配，避免与 RHEL/麒麟预置 ldap 账户冲突）
 > 部署目录：`/appdata/goldapadmin`
 
 ---
@@ -150,9 +150,9 @@ sudo rpm -ivh goldapadmin-0.1.0-1.el9.aarch64.rpm
 
 RPM 在安装阶段会自动完成：
 
-- `%pre`：创建系统用户 `ldap`（UID 55，GID 55，`/usr/sbin/nologin`）。
-- `%install`：把二进制、unit、示例配置拷到位。
-- `%post`：目录归属 + 如果 `config.yaml` 不存在则从 `.example` 复制 + `systemctl daemon-reload`。
+- `%pre`：确保系统账户 `ldap` 存在（不存在才创建，不指定 UID/GID 以免与 RHEL/麒麟预置账户冲突）。
+- `%install`：把二进制、unit、config.yaml.example、config.yaml 拷到 `%{buildroot}`。
+- `%post`：防御性 `chown -R ldap:ldap` 修正升级遗留权限 + `%systemd_post`（daemon-reload / enable）。
 
 ### 4.2 安装后立即要做的事
 
@@ -337,7 +337,7 @@ RPM 的 `%preun` / `%postun` 钩子会自动停服务、替换二进制、daemon
 sudo rpm -Uvh goldapadmin-0.2.0-1.el9.x86_64.rpm
 
 # 确认版本变了
-/opt/goldapadmin/goldapadmin --version   # 如果二进制实现了 version 参数
+/appdata/goldapadmin/goldapadmin --version   # 如果二进制实现了 version 参数
 rpm -q goldapadmin                       # 或看 RPM 记录
 
 # 健康检查
@@ -379,7 +379,7 @@ sudo systemctl disable --now goldapadmin
 
 RPM `%postun` 钩子：
 
-- `$1 == 0`（完全卸载）：`userdel --remove ldap` + `groupdel ldap`
+- `$1 == 0`（完全卸载）：`userdel ldap` + `groupdel ldap`（幂等；系统预置 ldap 账户已存在时会报错但被忽略）
 - **数据目录 `/appdata/goldapadmin/` 不会被删**（rpm 不删 `%dir` 里的数据文件），防止误删生产 SQLite。想彻底清手动删：
 
 ```bash
@@ -598,18 +598,34 @@ goldapadmin.amd64:  ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statica
 goldapadmin.arm64:  ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, ...
 ```
 
-### 14.2 spec 的双模式
+### 14.2 spec 的双模式与架构注入
 
-`deploy/rpm/goldapadmin.spec` 里 `%global _buildmode prebuilt` 是默认值，走交叉编译产物。CI 里也可以切到源码构建模式：
+`deploy/rpm/goldapadmin.spec` 默认 `%global _buildmode prebuilt`，走交叉编译产物。两个模式共用同一份 spec，通过 `--define` 参数切换：
 
 ```bash
-# 源码构建（rpmbuild 在构建机上自己跑 go build）
+# 预编译模式（默认，build-rpm.sh 就是这么干的）
+# 关键: 绝对不在 spec 内部用 %ifarch 判断二进制架构
+# 因为 %ifarch 求值的是【构建机】架构，不是 --target 指定的目标架构！
+# 二进制名一律由外部 _bin_arch 参数注入，和 --target 解耦
+rpmbuild \
+    --target x86_64 \
+    --define "_buildmode prebuilt" \
+    --define "_bin_arch amd64" \
+    -bb SPECS/goldapadmin.spec
+
+rpmbuild \
+    --target aarch64 \
+    --define "_buildmode prebuilt" \
+    --define "_bin_arch arm64" \
+    -bb SPECS/goldapadmin.spec
+
+# 源码构建模式（rpmbuild 在构建机上自己 go build + npm build）
 rpmbuild \
     --define "_buildmode source" \
-    --define "version 0.1.0" \
-    --target x86_64 \
     -bs SPECS/goldapadmin.spec    # 先打 src.rpm，再在构建机上 -bb
 ```
+
+> **踩坑记录**：最早版本用 `%ifarch x86_64 %global _bin_arch amd64`，在 x86_64 机器上 `rpmbuild --target aarch64` 会把 amd64 二进制塞进 arm64 RPM——装上直接 `exec format error`。RPM 的 `%ifarch` / `%ifnarch` 只看构建机架构，`--target` 只决定输出 RPM 的架构标签和依赖过滤，完全不触发条件分支。二进制名必须外部传参。
 
 ### 14.3 生命周期钩子
 
@@ -617,7 +633,7 @@ rpmbuild \
 |---|---|---|
 | `%pre` | 安装前 | 创建 `ldap` 用户 / 组（幂等，已存在就跳过） |
 | `%install` | 构建阶段 | `install -m` 拷文件到 `%{buildroot}` |
-| `%post` | 安装后 | `chown` / 首启时拷贝 config.yaml / `%systemd_post` |
+| `%post` | 安装后 | 防御性 `chown -R ldap:ldap`（处理升级遗留权限） + `%systemd_post` |
 | `%preun` | 卸载前 / 升级前 | `%systemd_preun` 停服务 |
 | `%postun` | 卸载后 / 升级后 | `%systemd_postun_with_restart` 重启；完全卸载时 `userdel` |
 

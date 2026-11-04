@@ -138,13 +138,17 @@ mkdir -p "$RPM_OUT"
 
 cd "$RPM_BUILDROOT"
 
-for arch in "${SPEC_ARCHS[@]}"; do
+for i in "${!SPEC_ARCHS[@]}"; do
+    arch="${SPEC_ARCHS[$i]}"
+    bin_arch="${BIN_ARCHS[$i]}"    # amd64 / arm64
+
     echo ""
-    echo "----- target: $arch -----"
+    echo "----- target: $arch   (binary arch: $bin_arch) -----"
 
     rpmbuild \
         --define "_topdir $RPM_BUILDROOT" \
         --define "_buildmode prebuilt" \
+        --define "_bin_arch $bin_arch" \
         --define "version $VERSION" \
         --define "release $RELEASE" \
         --target "$arch" \

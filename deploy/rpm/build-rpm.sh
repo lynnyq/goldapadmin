@@ -147,7 +147,6 @@ for i in "${!SPEC_ARCHS[@]}"; do
 
     rpmbuild \
         --define "_topdir $RPM_BUILDROOT" \
-        --define "_buildmode prebuilt" \
         --define "_bin_arch $bin_arch" \
         --define "version $VERSION" \
         --define "release $RELEASE" \
@@ -166,9 +165,11 @@ echo " RPM 产物:"
 ls -lh "$RPM_OUT"/
 echo "========================================"
 echo ""
-echo "安装示例:"
-echo "  sudo rpm -ivh goldapadmin-${VERSION}-${RELEASE}.el9.x86_64.rpm"
-echo "  sudo rpm -ivh goldapadmin-${VERSION}-${RELEASE}.el9.aarch64.rpm"
+echo "安装示例（按架构选一个）:"
+for rpm in "$RPM_OUT"/*.rpm; do
+    name="$(basename "$rpm")"
+    echo "  sudo rpm -ivh $name"
+done
 echo "  sudo systemctl enable --now goldapadmin"
 echo ""
 echo "配置文件位置: /appdata/goldapadmin/config/config.yaml"

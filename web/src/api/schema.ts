@@ -1,7 +1,7 @@
 /**
  * Schema 浏览相关 API
  *
- * 对应后端 /api/v1/schema 接口，读取 LDAP 服务端的 schema 定义
+ * 对应后端 /api/schema 接口，读取 LDAP 服务端的 schema 定义
  * （objectClass / attributeType），并支持查询某条目允许的属性集合。
  */
 import { request } from '@/utils/request'

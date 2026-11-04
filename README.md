@@ -303,8 +303,8 @@ journalctl -u goldapadmin -f
 # 跳过前端构建（如前端未改动）
 ./deploy/rpm/build-rpm.sh --skip-frontend
 
-# 安装
-sudo rpm -ivh deploy/rpm/output/rpms/goldapadmin-0.1.0-1.el9.x86_64.rpm
+# 安装（<dist> 换成构建时的发行版后缀，如 ky10 / el9 / oe24 / fc40）
+sudo rpm -ivh deploy/rpm/output/rpms/goldapadmin-0.1.0-1.<dist>.x86_64.rpm
 sudo systemctl enable --now goldapadmin
 ```
 
@@ -405,7 +405,7 @@ openssl rand -base64 48
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
 | POST | `/api/auth/login` | ❌ | 用户登录，返回 JWT Token |
-| GET  | `/api/auth/logout` | ✅ | 用户登出 |
+| POST | `/api/auth/logout` | ✅ | 用户登出 |
 
 **POST /api/auth/login**
 

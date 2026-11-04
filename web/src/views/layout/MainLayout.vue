@@ -239,8 +239,11 @@ function updateTime() {
 }
 /** 判断当前路由是否匹配指定路径前缀 */
 function isActive(p: string) { return route.path.startsWith(p) }
-/** 截断长字符串到指定长度 */
-function truncate(s: string, n: number) { return s.length <= n ? s : s.slice(0, n - 3) + '...' }
+/** 截断长字符串到指定长度（null/undefined 安全） */
+function truncate(s: string | null | undefined, n: number) {
+  if (!s) return ''
+  return s.length <= n ? s : s.slice(0, n - 3) + '...'
+}
 
 /** 切换当前连接的服务器 */
 function onServerChange(id: number) {

@@ -1,7 +1,7 @@
 /**
  * 书签相关 API
  *
- * 对应后端 /api/v1/bookmarks 接口，用于收藏常用 DN，便于快速跳转。
+ * 对应后端 /api/bookmarks 接口，用于收藏常用 DN，便于快速跳转。
  */
 import { request } from '@/utils/request'
 import type { Bookmark } from '@/types'

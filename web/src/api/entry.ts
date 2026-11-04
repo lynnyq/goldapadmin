@@ -1,11 +1,11 @@
 /**
  * 条目操作相关 API
  *
- * 对应后端 /api/v1/entry 接口，覆盖条目的增删改查、复制/移动/重命名，
+ * 对应后端 /api/entry 接口，覆盖条目的增删改查、复制/移动/重命名，
  * 以及目录树懒加载与自增 ID 分配（对标 phpLDAPadmin 的条目模板能力）。
  */
 import { request } from '@/utils/request'
-import type { LdapEntry, TreeNode } from '@/types'
+import type { LdapEntry, TreeNode, BatchResultItem } from '@/types'
 
 /**
  * 获取子节点列表（目录树懒加载）
@@ -16,6 +16,23 @@ import type { LdapEntry, TreeNode } from '@/types'
 export function getChildren(baseDN: string) {
   return request<TreeNode[]>({
     url: '/entry/children',
+    method: 'get',
+    params: { base_dn: baseDN },
+  })
+}
+
+/**
+ * 递归获取指定 baseDN 下完整目录树（对标 phpLDAPadmin 全量树导出）
+ *
+ * 与 getChildren（懒加载单层）不同，该接口一次性拉取所有子孙节点
+ * 并返回嵌套结构；适合较小规模目录或导出预览场景。
+ *
+ * @param baseDN 根条目 DN
+ * @returns 嵌套树结构（含所有子孙）
+ */
+export function getTree(baseDN: string) {
+  return request<TreeNode>({
+    url: '/entry/tree',
     method: 'get',
     params: { base_dn: baseDN },
   })
@@ -189,11 +206,18 @@ export function listDescendants(baseDN: string): Promise<{ count: number; dns: s
   })
 }
 
-/** 批量操作结果 */
+/** 批量操作结果（后端 BatchDelete / BatchModify 返回） */
 export interface BatchResult {
-  success: number
-  failed: number
+  /** 总条目数 */
   total: number
+  /** 成功条数 */
+  success: number
+  /** 失败条数 */
+  failed: number
+  /** 每条的详细结果（含失败原因） */
+  items: BatchResultItem[]
+  /** 批量操作总耗时（Go time.Duration，纳秒） */
+  duration?: number
 }
 
 /**

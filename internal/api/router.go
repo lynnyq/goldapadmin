@@ -39,7 +39,7 @@ func (r *Router) Register(engine *gin.Engine) {
 
 	// 公开接口
 	api.POST("/auth/login", r.Login)
-	api.GET("/auth/logout", r.Logout)
+	api.POST("/auth/logout", r.Logout)
 	api.GET("/health", middleware.StatusOK)
 	// 获取服务器列表需要公开，供登录页选择已保存的服务器
 	api.GET("/servers", r.ListServers)

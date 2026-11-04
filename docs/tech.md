@@ -383,7 +383,7 @@ goldapadmin/
 | 方法 | 路径 | Handler | 说明 |
 |---|---|---|---|
 | POST | `/api/auth/login` | `Login` | LDAP Bind 验证 + JWT 签发 + 可选保存服务器 |
-| GET | `/api/auth/logout` | `Logout` | 登出（前端清 token，后端空响应） |
+| POST | `/api/auth/logout` | `Logout` | 登出（销毁服务端会话 + 清除前端 token） |
 | GET | `/api/health` | `StatusOK` | 健康检查 `{"status":"ok"}` |
 
 ### 5.2 需认证接口（需 `Authorization: Bearer <token>`）

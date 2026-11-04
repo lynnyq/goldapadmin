@@ -35,6 +35,8 @@ export interface LdapServer {
   use_tls: boolean
   /** 是否启用 LDAPS (SSL) */
   use_ssl: boolean
+  /** 是否跳过 TLS 证书校验（生产环境默认 false） */
+  skip_tls_verify: boolean
   /** 连接超时（秒） */
   timeout: number
   /** 创建时间 */
@@ -201,6 +203,18 @@ export interface MonitorStats {
   operations_by_type: Record<string, number>
   /** 响应时间序列（time 时间点，avg_ms 平均耗时） */
   response_times: { time: string; avg_ms: number }[]
+}
+
+/** 批量操作单条结果（后端 BatchResultItem） */
+export interface BatchResultItem {
+  /** 操作目标 DN */
+  dn: string
+  /** 是否成功 */
+  success: boolean
+  /** 失败原因（成功时为空） */
+  error?: string
+  /** 本条耗时（纳秒，Go time.Duration） */
+  duration?: number
 }
 
 /** 书签（收藏的 DN） */

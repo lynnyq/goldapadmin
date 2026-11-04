@@ -47,16 +47,16 @@
             <div class="attr-group must">
               <h5>MUST</h5>
               <div class="attr-chips">
-                <span v-for="a in currentOC.must" :key="a" class="attr-chip">{{ a }}</span>
-                <span v-if="!currentOC.must.length" class="empty-note">无</span>
+                <span v-for="a in (currentOC.must ?? [])" :key="a" class="attr-chip">{{ a }}</span>
+                <span v-if="!(currentOC.must ?? []).length" class="empty-note">无</span>
               </div>
             </div>
 
             <div class="attr-group may">
               <h5>MAY</h5>
               <div class="attr-chips">
-                <span v-for="a in currentOC.may" :key="a" class="attr-chip">{{ a }}</span>
-                <span v-if="!currentOC.may.length" class="empty-note">无</span>
+                <span v-for="a in (currentOC.may ?? [])" :key="a" class="attr-chip">{{ a }}</span>
+                <span v-if="!(currentOC.may ?? []).length" class="empty-note">无</span>
               </div>
             </div>
           </div>

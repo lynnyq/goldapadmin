@@ -1,7 +1,7 @@
 /**
  * 服务器与认证相关 API
  *
- * 对应后端 /api/v1/auth、/api/v1/servers 接口：
+ * 对应后端 /api/auth、/api/servers 接口：
  * - 登录 / 登出：绑定 LDAP 并将连接凭据缓存到服务端会话
  * - 服务器配置：LDAP 连接的增删改查管理
  */

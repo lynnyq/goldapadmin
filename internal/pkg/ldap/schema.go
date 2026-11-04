@@ -202,6 +202,13 @@ func (s *SchemaService) GetAllowedAttributes(conn *ldap.Conn, objectClasses []st
 			may = append(may, k)
 		}
 	}
+	// 保证返回非 nil slice，避免 JSON 序列化为 null
+	if must == nil {
+		must = []string{}
+	}
+	if may == nil {
+		may = []string{}
+	}
 	return must, may, nil
 }
 
@@ -230,7 +237,13 @@ var (
 var ocSupStopWords = []string{"STRUCTURAL", "AUXILIARY", "ABSTRACT", "MUST", "MAY", "DESC", "NAME", "OBSOLETE", "X-"}
 
 func parseObjectClass(def string) model.ObjectClassDef {
-	oc := model.ObjectClassDef{Type: "structural"}
+	oc := model.ObjectClassDef{
+		Type:      "structural",
+		Names:     []string{},
+		Must:      []string{},
+		May:       []string{},
+		Superior:  []string{},
+	}
 
 	if m := ocOIDRegexp.FindStringSubmatch(def); len(m) > 1 {
 		oc.OID = m[1]

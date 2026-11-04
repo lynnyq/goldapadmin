@@ -1,7 +1,7 @@
 /**
  * 搜索相关 API
  *
- * 对应后端 /api/v1/search 接口，提供 LDAP 高级搜索能力
+ * 对应后端 /api/search 接口，提供 LDAP 高级搜索能力
  * （自定义 base DN、filter、范围与返回属性）。
  */
 import { request } from '@/utils/request'

@@ -1,7 +1,7 @@
 /**
  * 操作日志相关 API
  *
- * 对应后端 /api/v1/logs 接口，用于查询用户在系统内执行的写操作审计记录。
+ * 对应后端 /api/logs 接口，用于查询用户在系统内执行的写操作审计记录。
  */
 import { request } from '@/utils/request'
 import type { OperationLog } from '@/types'

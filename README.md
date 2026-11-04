@@ -344,7 +344,7 @@ server:
   mode: release                 # debug / release / test
 
 database:
-  path: /var/lib/goldapadmin/goldapadmin.db  # SQLite 文件路径
+  path: ./data/goldapadmin.db   # 相对路径（相对 WorkingDirectory）；生产用绝对路径，如 /appdata/goldapadmin/data/goldapadmin.db
 
 jwt:
   secret: REPLACE_WITH_OPENSSL_RAND_BASE64_VALUE_MINUS_48_BYTES_XXXXXXXXXXXXXXXXXXXXXXXXX

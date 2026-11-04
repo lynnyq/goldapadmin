@@ -67,9 +67,10 @@ RPM 安装后实际落盘结构如下（`rpm -ql goldapadmin` 查看）：
 
 | 路径 | owner:group | mode | 说明 |
 |---|---|---|---|
-| `/appdata/goldapadmin/goldapadmin` | root:root | 0755 | 二进制需要 root 所有权，让 ldap 用户可执行但不可修改 |
+| `/appdata/goldapadmin/` | ldap:ldap | 0755 | 应用根目录，其他用户可遍历进入，便于运维查看文件 |
+| `/appdata/goldapadmin/goldapadmin` | root:root | 0755 | 二进制需要 root 所有权，ldap 用户可执行但不可修改 |
 | `/appdata/goldapadmin/config/config.yaml` | ldap:ldap | 0640 | 含 JWT 密钥，组不可读（ldap 组里只有 ldap 用户） |
-| `/appdata/goldapadmin/data/` | ldap:ldap | 0750 | SQLite 只有 ldap 用户可以读写 |
+| `/appdata/goldapadmin/data/` | ldap:ldap | 0750 | SQLite 数据目录，只有 ldap 用户可以读写 |
 
 ---
 
@@ -116,9 +117,13 @@ cd goldapadmin
 
 ```
 deploy/rpm/output/rpms/
-├── goldapadmin-0.1.0-1.el9.x86_64.rpm
+├── goldapadmin-0.1.0-1.ky10.x86_64.rpm       # 麒麟 V10 构建示例
+├── goldapadmin-0.1.0-1.ky10.aarch64.rpm
+├── goldapadmin-0.1.0-1.el9.x86_64.rpm        # Rocky / Alma / RHEL 9 构建示例
 └── goldapadmin-0.1.0-1.el9.aarch64.rpm
 ```
+
+> `%{?dist}` 宏按构建环境自动展开发行版后缀：麒麟 V10 = `.ky10`、openEuler = `.oe24`、RHEL 9 / Rocky 9 = `.el9`、Fedora = `.fc40`。**目标机装什么发行版，就在什么发行版上构建**（或在任意 RPM 系发行版上交叉构建，`.rpm` 后缀通用）。
 
 | 架构 | 适用机型 |
 |---|---|
@@ -141,11 +146,11 @@ scp deploy/rpm/output/rpms/*.rpm  bastion:/data/releases/goldapadmin/
 ### 4.1 新安装
 
 ```bash
-# x86_64 机器
-sudo rpm -ivh goldapadmin-0.1.0-1.el9.x86_64.rpm
+# x86_64 机器（把 <dist> 换成实际后缀，如 ky10 / el9 / oe24 / fc40）
+sudo rpm -ivh goldapadmin-0.1.0-1.<dist>.x86_64.rpm
 
 # aarch64 机器
-sudo rpm -ivh goldapadmin-0.1.0-1.el9.aarch64.rpm
+sudo rpm -ivh goldapadmin-0.1.0-1.<dist>.aarch64.rpm
 ```
 
 RPM 在安装阶段会自动完成：
@@ -333,8 +338,8 @@ sudo firewall-cmd --list-all   # 确认只有 80/443
 RPM 的 `%preun` / `%postun` 钩子会自动停服务、替换二进制、daemon-reload、重启服务——**业务中断秒级**（SQLite 不迁移、不改动数据）。
 
 ```bash
-# 直接 upgrade
-sudo rpm -Uvh goldapadmin-0.2.0-1.el9.x86_64.rpm
+# 直接 upgrade（<dist> 换成实际后缀）
+sudo rpm -Uvh goldapadmin-0.2.0-1.<dist>.x86_64.rpm
 
 # 确认版本变了
 /appdata/goldapadmin/goldapadmin --version   # 如果二进制实现了 version 参数
@@ -598,34 +603,21 @@ goldapadmin.amd64:  ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statica
 goldapadmin.arm64:  ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, ...
 ```
 
-### 14.2 spec 的双模式与架构注入
+### 14.2 spec 的架构注入
 
-`deploy/rpm/goldapadmin.spec` 默认 `%global _buildmode prebuilt`，走交叉编译产物。两个模式共用同一份 spec，通过 `--define` 参数切换：
+`deploy/rpm/goldapadmin.spec` 是纯 prebuilt 模式，**spec 内部绝不使用 `%ifarch`**——因为 RPM 的 `%ifarch` 求值的是**构建机**架构，`--target` 只决定输出 RPM 的架构标签和依赖过滤，完全不触发条件分支。如果在 x86_64 机器上 `rpmbuild --target aarch64` 时用了 `%ifarch x86_64 %global _bin_arch amd64`，会把 x86 二进制塞进 arm 包里，装上直接 `exec format error`。
+
+**二进制名必须由外部 `--define "_bin_arch amd64|arm64"` 显式注入**，和 `--target` 解耦：
 
 ```bash
-# 预编译模式（默认，build-rpm.sh 就是这么干的）
-# 关键: 绝对不在 spec 内部用 %ifarch 判断二进制架构
-# 因为 %ifarch 求值的是【构建机】架构，不是 --target 指定的目标架构！
-# 二进制名一律由外部 _bin_arch 参数注入，和 --target 解耦
-rpmbuild \
-    --target x86_64 \
-    --define "_buildmode prebuilt" \
-    --define "_bin_arch amd64" \
-    -bb SPECS/goldapadmin.spec
+# x86_64 目标 → amd64 二进制
+rpmbuild --target x86_64  --define "_bin_arch amd64" -bb SPECS/goldapadmin.spec
 
-rpmbuild \
-    --target aarch64 \
-    --define "_buildmode prebuilt" \
-    --define "_bin_arch arm64" \
-    -bb SPECS/goldapadmin.spec
-
-# 源码构建模式（rpmbuild 在构建机上自己 go build + npm build）
-rpmbuild \
-    --define "_buildmode source" \
-    -bs SPECS/goldapadmin.spec    # 先打 src.rpm，再在构建机上 -bb
+# aarch64 目标 → arm64 二进制
+rpmbuild --target aarch64 --define "_bin_arch arm64" -bb SPECS/goldapadmin.spec
 ```
 
-> **踩坑记录**：最早版本用 `%ifarch x86_64 %global _bin_arch amd64`，在 x86_64 机器上 `rpmbuild --target aarch64` 会把 amd64 二进制塞进 arm64 RPM——装上直接 `exec format error`。RPM 的 `%ifarch` / `%ifnarch` 只看构建机架构，`--target` 只决定输出 RPM 的架构标签和依赖过滤，完全不触发条件分支。二进制名必须外部传参。
+**另外，RPM（麒麟 V10 / openEuler 自带 4.14 版本）有已知 bug**：section（`%prep` / `%build` / `%install`）内部放 `%if...%endif` 块时，`%endif` 后 section 栈没正确弹出，下一个 section 会被误报为"第二个"。所以本 spec 里 **所有 section 内部都没有任何 `%if` 块**——prebuilt 模式下 `%prep` 和 `%build` 显式留空就是为了绕开这个坑。
 
 ### 14.3 生命周期钩子
 

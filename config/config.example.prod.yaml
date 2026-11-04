@@ -19,7 +19,8 @@ server:
   mode: release
 
 database:
-  path: /var/lib/goldapadmin/goldapadmin.db
+  # 与 RPM 部署目录对齐；RPM 已将此目录归属 ldap:ldap、mode 0750
+  path: /appdata/goldapadmin/data/goldapadmin.db
 
 jwt:
   # ⚠️ 上线前必须替换

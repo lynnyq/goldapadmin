@@ -2,6 +2,7 @@ package ldap
 
 import (
 	"bufio"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"sort"
@@ -25,60 +26,94 @@ type ImportResult struct {
 	Errors  []string `json:"errors"`
 }
 
+// maxImportEntries 单次 LDIF 导入的条目上限，防止超大文件打爆进程与 LDAP 服务器
+const maxImportEntries = 1000
+
+// maxImportValueLength 单条属性值长度上限（字节）
+const maxImportValueLength = 1 << 20
+
 // Import 导入 LDIF 内容
-func (s *LdifService) Import(conn *ldap.Conn, content string) (*ImportResult, error) {
+//
+// 安全限制：最多 maxImportEntries 条；每条必须包含合法 dn；若 baseDN 非空，则要求
+// 条目 DN 位于该子树内；拒绝 changetype=delete/modify/modrdn（避免误删或语义错乱）。
+func (s *LdifService) Import(conn *ldap.Conn, content, baseDN string) (*ImportResult, error) {
 	result := &ImportResult{Errors: []string{}}
 
 	entries, err := parseLdif(content)
 	if err != nil {
 		return nil, err
 	}
+	if len(entries) > maxImportEntries {
+		return nil, fmt.Errorf("LDIF 条目数 %d 超过单次导入上限 %d", len(entries), maxImportEntries)
+	}
+
+	baseDN = strings.TrimSpace(baseDN)
 
 	for _, entry := range entries {
-		dn := entry["dn"]
+		dn := strings.TrimSpace(entry["dn"])
 		if dn == "" {
 			result.Failed++
-			result.Errors = append(result.Errors, "missing dn")
+			result.Errors = append(result.Errors, "缺少 dn")
+			continue
+		}
+		if _, err := ldap.ParseDN(dn); err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("dn 语法非法 %q: %v", dn, err))
+			continue
+		}
+		if baseDN != "" && !isDNWithinBase(dn, baseDN) {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("dn %q 不在允许导入的 BaseDN %q 范围内", dn, baseDN))
 			continue
 		}
 
 		delete(entry, "dn")
 
-		// 检查 changetype
-		changetype := entry["changetype"]
+		changetype := strings.ToLower(strings.TrimSpace(entry["changetype"]))
 		delete(entry, "changetype")
 
-		switch changetype {
-		case "delete":
-			if err := conn.Del(ldap.NewDelRequest(dn, nil)); err != nil {
+		if changetype != "" && changetype != "add" {
+			// 明确拒绝删除/修改类指令：导入接口只做新增，避免误删与语义歧义
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("dn %q 的 changetype=%s 不被支持（仅支持新增）", dn, changetype))
+			continue
+		}
+
+		addReq := ldap.NewAddRequest(dn, nil)
+		tooLong := false
+		for attr, values := range entry {
+			if strings.TrimSpace(attr) == "" {
+				continue
+			}
+			if len(values) > maxImportValueLength {
 				result.Failed++
-				result.Errors = append(result.Errors, fmt.Sprintf("delete %s: %v", dn, err))
-			} else {
-				result.Success++
+				result.Errors = append(result.Errors, fmt.Sprintf("dn %q 属性 %s 的值过长", dn, attr))
+				tooLong = true
+				break
 			}
-		case "modify", "modrdn", "moddn":
-			// 简化处理：modify 暂用 add 代替
-			fallthrough
-		default:
-			// add
-			addReq := ldap.NewAddRequest(dn, nil)
-			for attr, values := range entry {
-				if attr == "" {
-					continue
-				}
-				vals := strings.Split(values, "\n")
-				addReq.Attribute(attr, vals)
-			}
-			if err := conn.Add(addReq); err != nil {
-				result.Failed++
-				result.Errors = append(result.Errors, fmt.Sprintf("add %s: %v", dn, err))
-			} else {
-				result.Success++
-			}
+			vals := strings.Split(values, "\n")
+			addReq.Attribute(attr, vals)
+		}
+		if tooLong {
+			continue
+		}
+		if err := conn.Add(addReq); err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("add %s: %v", dn, err))
+		} else {
+			result.Success++
 		}
 	}
 
 	return result, nil
+}
+
+// isDNWithinBase 判断 dn 是否等于 baseDN 或位于其子树内（大小写不敏感）
+func isDNWithinBase(dn, baseDN string) bool {
+	if strings.EqualFold(strings.TrimSpace(dn), strings.TrimSpace(baseDN)) {
+		return true
+	}
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(dn)), ","+strings.ToLower(strings.TrimSpace(baseDN)))
 }
 
 // Export 导出 LDIF
@@ -96,7 +131,7 @@ func (s *LdifService) Export(conn *ldap.Conn, dn string, recursive bool) (string
 
 	req := ldap.NewSearchRequest(
 		dn, scope, ldap.NeverDerefAliases,
-		0, 0, false,
+		MaxSubtreeEntries, 0, false,
 		"(objectClass=*)",
 		[]string{"*", "+"},
 		nil,
@@ -105,7 +140,7 @@ func (s *LdifService) Export(conn *ldap.Conn, dn string, recursive bool) (string
 	if err != nil {
 		var ldapErr *ldap.Error
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultSizeLimitExceeded {
-			return "", fmt.Errorf("Export: 条目数超过服务器 sizeLimit（已拉 %d 条被截断）", len(result.Entries))
+			return "", fmt.Errorf("Export: 条目数超过单次导出上限 %d（已拉 %d 条被截断），请缩小导出范围", MaxSubtreeEntries, len(result.Entries))
 		}
 		return "", err
 	}
@@ -162,65 +197,78 @@ func ExportFilename(baseDN string) string {
 }
 
 // parseLdif 解析 LDIF 内容
+//
+// 支持：注释、空行分隔、续行折叠（以空格开头）、base64 值（attr:: base64）。
+// 空属性值（attr:）会被保留为空串；非法 base64 直接返回错误，避免把编码串当明文写入。
 func parseLdif(content string) ([]map[string]string, error) {
 	var entries []map[string]string
 	current := make(map[string]string)
+	lastAttr := ""
+
+	flush := func() {
+		if len(current) > 0 {
+			entries = append(entries, current)
+			current = make(map[string]string)
+			lastAttr = ""
+		}
+	}
 
 	scanner := bufio.NewScanner(strings.NewReader(content))
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// 跳过注释和空行
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
-
-		if line == "" {
-			if len(current) > 0 {
-				entries = append(entries, current)
-				current = make(map[string]string)
-			}
+		if strings.TrimSpace(line) == "" {
+			flush()
 			continue
 		}
 
-		// 续行（以空格开头）
+		// 续行：LDIF 折叠以单个空格开头，直接拼接到上一个属性值
 		if strings.HasPrefix(line, " ") {
-			if len(entries) > 0 && len(current) == 0 {
-				// 续行到上一条目最后一个属性
-				last := entries[len(entries)-1]
-				for k, v := range last {
-					_ = k
-					_ = v
-				}
+			if lastAttr == "" {
+				return nil, fmt.Errorf("非法的 LDIF 续行（缺少前序属性）")
 			}
+			current[lastAttr] += line[1:]
 			continue
 		}
 
 		idx := strings.Index(line, ":")
 		if idx < 0 {
-			continue
+			return nil, fmt.Errorf("非法的 LDIF 行: %q", line)
 		}
 
 		attr := strings.TrimSpace(line[:idx])
-		value := strings.TrimSpace(line[idx+1:])
-
-		// 处理 base64 编码
-		if strings.HasPrefix(line[idx+1:], ":") {
-			// base64 解码
-			// 简化处理，不做解码
-			value = strings.TrimSpace(line[idx+2:])
+		if attr == "" {
+			return nil, fmt.Errorf("非法的 LDIF 行（属性为空）: %q", line)
 		}
+		rest := line[idx+1:]
 
-		if existing, ok := current[attr]; ok {
-			current[attr] = existing + "\n" + value
+		// base64 编码值：attr:: <base64>
+		if strings.HasPrefix(rest, ":") {
+			encoded := strings.TrimSpace(rest[1:])
+			decoded, err := base64.StdEncoding.DecodeString(encoded)
+			if err != nil {
+				return nil, fmt.Errorf("属性 %s 的 base64 值解码失败: %w", attr, err)
+			}
+			rest = string(decoded)
+			if len(rest) > maxImportValueLength {
+				return nil, fmt.Errorf("属性 %s 的值超过长度上限", attr)
+			}
 		} else {
-			current[attr] = value
+			rest = strings.TrimPrefix(rest, " ")
 		}
+
+		if _, ok := current[attr]; ok {
+			current[attr] += "\n" + rest
+		} else {
+			current[attr] = rest
+		}
+		lastAttr = attr
 	}
 
-	if len(current) > 0 {
-		entries = append(entries, current)
-	}
-
+	flush()
 	return entries, scanner.Err()
 }

@@ -127,10 +127,10 @@ sn: user
 	if len(entries) != 1 {
 		t.Fatalf("解析出 %d 条, 期望 1 条", len(entries))
 	}
-	// base64 以 :: 开头时取第三个 ":" 之后的内容
+	// base64 值（attr:: base64）应被解码为明文
 	pwd := entries[0]["userPassword"]
-	if !strings.Contains(pwd, "cGFzc3dvcmQxMjM=") {
-		t.Errorf("base64 值未正确处理, 得到 %q", pwd)
+	if pwd != "password123" {
+		t.Errorf("base64 值应解码为 password123, 得到 %q", pwd)
 	}
 }
 
@@ -164,5 +164,51 @@ func TestNewLdifService(t *testing.T) {
 	svc := NewLdifService()
 	if svc == nil {
 		t.Error("NewLdifService 不应返回 nil")
+	}
+}
+
+func TestParseLdif_ContinuationFolding(t *testing.T) {
+	input := `dn: cn=test,dc=example,dc=com
+description: long value
+  continued here
+  and here
+cn: test
+
+`
+	entries, err := parseLdif(input)
+	if err != nil {
+		t.Fatalf("parseLdif 失败: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("解析出 %d 条, 期望 1 条", len(entries))
+	}
+	if got := entries[0]["description"]; got != "long value continued here and here" {
+		t.Errorf("续行折叠结果 = %q", got)
+	}
+}
+
+func TestParseLdif_InvalidBase64(t *testing.T) {
+	input := "dn: cn=test,dc=example,dc=com\nuserPassword:: !!!not-base64!!!\n\n"
+	if _, err := parseLdif(input); err == nil {
+		t.Error("非法 base64 值应返回错误")
+	}
+}
+
+func TestIsDNWithinBase(t *testing.T) {
+	base := "dc=example,dc=com"
+	cases := []struct {
+		dn   string
+		want bool
+	}{
+		{"cn=user,dc=example,dc=com", true},
+		{"CN=USER,DC=EXAMPLE,DC=COM", true},
+		{base, true},
+		{"cn=user,dc=other,dc=com", false},
+		{"dc=com", false},
+	}
+	for _, c := range cases {
+		if got := isDNWithinBase(c.dn, base); got != c.want {
+			t.Errorf("isDNWithinBase(%q) = %v, 期望 %v", c.dn, got, c.want)
+		}
 	}
 }

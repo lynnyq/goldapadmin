@@ -6,11 +6,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/lynnyq/goldapadmin/internal/model"
-	"github.com/lynnyq/goldapadmin/internal/pkg/response"
 	pkgldap "github.com/lynnyq/goldapadmin/internal/pkg/ldap"
+	"github.com/lynnyq/goldapadmin/internal/pkg/response"
 )
 
 // Search 搜索条目
+//
+// 安全措施：
+//  1. filter 必须通过 ValidateFilter（长度/嵌套/括号配对），防止 LDAP 注入与异常请求
+//  2. scope 必须是合法值（base/one/sub）
+//  3. 未指定 size_limit 或 size_limit=0 时强制使用 DefaultSearchSizeLimit（1000），
+//     防止全量拉取压垮 LDAP 服务器
 func (r *Router) Search(c *gin.Context) {
 	baseDN := c.Query("base_dn")
 	filter := c.Query("filter")
@@ -20,16 +26,46 @@ func (r *Router) Search(c *gin.Context) {
 		return
 	}
 
-	sizeLimit := 0
-	if sl := c.Query("size_limit"); sl != "" {
-		sizeLimit, _ = strconv.Atoi(sl)
+	// 安全校验 1：filter 语法 + 边界
+	if err := pkgldap.ValidateFilter(filter); err != nil {
+		response.Fail(c, 400, "filter 非法: "+err.Error())
+		return
 	}
 
-	// 读取前端指定的属性列表（如 gidNumber 选择器只需要 cn、gidNumber）；
-	// 未指定时传 nil，由 EntryService.Search 用默认属性集
+	// 安全校验 2：baseDN 语法必须合法
+	if err := validateDN(baseDN); err != nil {
+		response.Fail(c, 400, err.Error())
+		return
+	}
+
+	// 安全校验 3：scope 必须合法
+	if _, err := pkgldap.ValidateScope(scope); err != nil {
+		response.Fail(c, 400, err.Error())
+		return
+	}
+
+	sizeLimit := pkgldap.DefaultSearchSizeLimit // 默认强制上限
+	if sl := c.Query("size_limit"); sl != "" {
+		parsed, err := strconv.Atoi(sl)
+		if err == nil && parsed > 0 {
+			sizeLimit = parsed
+		}
+	}
+
+	// 安全校验 3：size_limit 硬上限，防止过大值
+	if sizeLimit > 10000 {
+		response.Fail(c, 400, "size_limit 过大（最多 10000）")
+		return
+	}
+
 	attrs := c.QueryArray("attributes")
 	var attributes []string
 	if len(attrs) > 0 {
+		// 安全校验 4：属性名合法，禁止 "*"/"+" 等通配符（避免绕过敏感属性脱敏的意图）
+		if err := pkgldap.ValidateAttributeNames(attrs); err != nil {
+			response.Fail(c, 400, "attributes 非法: "+err.Error())
+			return
+		}
 		attributes = attrs
 	}
 
@@ -39,19 +75,17 @@ func (r *Router) Search(c *gin.Context) {
 	}
 	conn, err := r.svc.Connect(params)
 	if err != nil {
-		response.Fail(c, 500, "连接 LDAP 失败: "+err.Error())
+		response.Fail(c, 500, "连接 LDAP 失败")
 		return
 	}
 	defer conn.Close()
 
 	svc := pkgldap.NewEntryService()
-	entries, err := svc.Search(conn, baseDN, filter, scope, attributes, sizeLimit)
+	entries, err := svc.Search(conn.Conn, baseDN, filter, scope, attributes, sizeLimit)
 	if entries == nil {
 		entries = []model.LdapEntry{}
 	}
 
-	// 被服务器 sizelimit 截断但返回了部分数据 → 以 code=0 + truncated 消息返回，
-	// 前端可正常渲染部分结果并展示"结果被截断"警告（对标 phpLDAPadmin 行为）
 	if errors.Is(err, pkgldap.ErrSizeLimitTruncated) {
 		c.JSON(200, response.Response{
 			Code:    0,

@@ -97,7 +97,7 @@ const router = createRouter({
  * - 已登录访问 /login：重定向到主页（避免重复登录）
  */
 router.beforeEach((to, _from, next) => {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   if (to.path !== '/login' && !token) {
     next('/login')
   } else if (to.path === '/login' && token) {

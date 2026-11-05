@@ -2,8 +2,8 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/lynnyq/goldapadmin/internal/pkg/response"
 	pkgldap "github.com/lynnyq/goldapadmin/internal/pkg/ldap"
+	"github.com/lynnyq/goldapadmin/internal/pkg/response"
 	"net/url"
 )
 
@@ -23,15 +23,15 @@ func (r *Router) ImportLdif(c *gin.Context) {
 	}
 	conn, err := r.svc.Connect(params)
 	if err != nil {
-		response.Fail(c, 500, "连接 LDAP 失败: "+err.Error())
+		response.Fail(c, 500, "连接 LDAP 失败")
 		return
 	}
 	defer conn.Close()
 
 	svc := pkgldap.NewLdifService()
-	result, err := svc.Import(conn, req.Content)
+	result, err := svc.Import(conn.Conn, req.Content, params.Server.BaseDN)
 	if err != nil {
-		response.Fail(c, 500, "导入失败: "+err.Error())
+		response.Fail(c, 400, "导入失败: "+err.Error())
 		return
 	}
 	response.Success(c, result)
@@ -47,6 +47,10 @@ func (r *Router) ExportLdif(c *gin.Context) {
 		response.Fail(c, 400, "dn 不能为空")
 		return
 	}
+	if err := validateDN(dn); err != nil {
+		response.Fail(c, 400, err.Error())
+		return
+	}
 
 	params := r.mustConnParams(c)
 	if params == nil {
@@ -54,13 +58,13 @@ func (r *Router) ExportLdif(c *gin.Context) {
 	}
 	conn, err := r.svc.Connect(params)
 	if err != nil {
-		response.Fail(c, 500, "连接 LDAP 失败: "+err.Error())
+		response.Fail(c, 500, "连接 LDAP 失败")
 		return
 	}
 	defer conn.Close()
 
 	svc := pkgldap.NewLdifService()
-	content, err := svc.Export(conn, dn, recursive)
+	content, err := svc.Export(conn.Conn, dn, recursive)
 	if err != nil {
 		response.Fail(c, 500, "导出失败: "+err.Error())
 		return

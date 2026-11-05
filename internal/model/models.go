@@ -4,18 +4,18 @@ import "time"
 
 // LdapServer LDAP 服务器配置
 type LdapServer struct {
-	ID             int       `json:"id" db:"id"`
-	Name           string    `json:"name" db:"name"`
-	Host           string    `json:"host" db:"host"`
-	Port           int       `json:"port" db:"port"`
-	BaseDN         string    `json:"base_dn" db:"base_dn"`
-	BindDN         string    `json:"bind_dn" db:"bind_dn"`
-	UseTLS         bool      `json:"use_tls" db:"use_tls"`
-	UseSSL         bool      `json:"use_ssl" db:"use_ssl"`
-	SkipTLSVerify  bool      `json:"skip_tls_verify" db:"skip_tls_verify"` // 是否跳过 TLS 证书校验（生产默认 false）
-	Timeout        int       `json:"timeout" db:"timeout"`
-	CreatedAt      time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at" db:"updated_at"`
+	ID            int       `json:"id" db:"id"`
+	Name          string    `json:"name" db:"name"`
+	Host          string    `json:"host" db:"host"`
+	Port          int       `json:"port" db:"port"`
+	BaseDN        string    `json:"base_dn" db:"base_dn"`
+	BindDN        string    `json:"bind_dn" db:"bind_dn"`
+	UseTLS        bool      `json:"use_tls" db:"use_tls"`
+	UseSSL        bool      `json:"use_ssl" db:"use_ssl"`
+	SkipTLSVerify bool      `json:"skip_tls_verify" db:"skip_tls_verify"` // 是否跳过 TLS 证书校验（生产默认 false）
+	Timeout       int       `json:"timeout" db:"timeout"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // Bookmark 书签
@@ -45,6 +45,7 @@ type OperationLog struct {
 type LdapAttribute struct {
 	Name   string   `json:"name"`
 	Values []string `json:"values"`
+	Masked bool     `json:"masked,omitempty"`
 }
 
 // LdapEntry LDAP 条目
@@ -61,10 +62,10 @@ type TreeNode struct {
 	RDN           string     `json:"rdn"`
 	ObjectClasses []string   `json:"object_classes"`
 	HasChildren   bool       `json:"has_children"`
-	IsLeaf        bool       `json:"is_leaf"`              // true 表示无子节点（前端 el-tree leaf 字段）
-	ChildCount    int        `json:"child_count,omitempty"`  // 直接子条目数（省略表示未查询）
+	IsLeaf        bool       `json:"is_leaf"`               // true 表示无子节点（前端 el-tree leaf 字段）
+	ChildCount    int        `json:"child_count,omitempty"` // 直接子条目数（省略表示未查询）
 	EntryType     string     `json:"entry_type,omitempty"`  // user/group/ou/org/domain/gpo/alias/referral/unknown
-	Disabled      bool       `json:"disabled,omitempty"`     // AD userAccountControl 禁用账户
+	Disabled      bool       `json:"disabled,omitempty"`    // AD userAccountControl 禁用账户
 	Children      []TreeNode `json:"children,omitempty"`
 }
 
@@ -93,8 +94,8 @@ type AttributeTypeDef struct {
 
 // ModifyRequest 修改条目请求
 type ModifyRequest struct {
-	DN      string          `json:"dn"`
-	Changes []ModifyChange  `json:"changes"`
+	DN      string         `json:"dn"`
+	Changes []ModifyChange `json:"changes"`
 	// PasswordAlgos 密码属性哈希算法（对标 phpLDAPadmin password helper）
 	// key=属性名（如 userPassword），value=SSHA/SHA/MD5，空或缺省为明文
 	PasswordAlgos map[string]string `json:"password_algos,omitempty"`

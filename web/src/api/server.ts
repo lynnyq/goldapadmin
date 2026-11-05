@@ -34,8 +34,29 @@ export function logout() {
   return request({ url: '/auth/logout', method: 'post' })
 }
 
+/** 登录页可展示的最小服务器信息（不含 bind_dn/base_dn） */
+export interface PublicServerInfo {
+  id: number
+  name: string
+  host: string
+  port: number
+  use_tls: boolean
+  use_ssl: boolean
+}
+
 /**
- * 获取服务器配置列表
+ * 获取登录页可用的服务器列表
+ *
+ * 无需认证，仅返回连接目标与名称；不包含管理员绑定 DN、BaseDN 等敏感字段。
+ *
+ * @returns 最小服务器信息列表
+ */
+export function getPublicServers() {
+  return request<PublicServerInfo[]>({ url: '/servers/public', method: 'get' })
+}
+
+/**
+ * 获取服务器配置列表（仅管理员可访问）
  *
  * @returns 已配置的 LDAP 服务器列表
  */

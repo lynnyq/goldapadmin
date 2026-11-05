@@ -476,6 +476,8 @@ async function handleCommand(cmd: string) {
   background: var(--surface-base) !important;
   border-right: 1px solid var(--border-subtle) !important;
   transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 
   .pane-head {
@@ -515,7 +517,8 @@ async function handleCommand(cmd: string) {
   }
 
   .collapsed-hint {
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     display: flex; align-items: center; justify-content: center;
     color: var(--text-muted);
   }

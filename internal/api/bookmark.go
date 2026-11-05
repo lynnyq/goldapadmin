@@ -14,7 +14,7 @@ func (r *Router) ListBookmarks(c *gin.Context) {
 	serverID := middleware.GetServerID(c)
 	list, err := r.svc.GetBookmarkDAO().ListByServer(serverID)
 	if err != nil {
-		response.Fail(c, 500, err.Error())
+		response.Fail(c, 500, "获取书签失败")
 		return
 	}
 	if list == nil {
@@ -32,7 +32,7 @@ func (r *Router) CreateBookmark(c *gin.Context) {
 	}
 	b.ServerID = middleware.GetServerID(c)
 	if err := r.svc.GetBookmarkDAO().Create(&b); err != nil {
-		response.Fail(c, 500, err.Error())
+		response.Fail(c, 500, "保存书签失败")
 		return
 	}
 	response.Success(c, b)
@@ -42,7 +42,7 @@ func (r *Router) CreateBookmark(c *gin.Context) {
 func (r *Router) DeleteBookmark(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	if err := r.svc.GetBookmarkDAO().Delete(id); err != nil {
-		response.Fail(c, 500, err.Error())
+		response.Fail(c, 500, "删除书签失败")
 		return
 	}
 	response.Success(c, nil)

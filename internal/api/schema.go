@@ -2,8 +2,8 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/lynnyq/goldapadmin/internal/pkg/response"
 	pkgldap "github.com/lynnyq/goldapadmin/internal/pkg/ldap"
+	"github.com/lynnyq/goldapadmin/internal/pkg/response"
 )
 
 // GetObjectClasses 获取所有 objectClass
@@ -14,13 +14,13 @@ func (r *Router) GetObjectClasses(c *gin.Context) {
 	}
 	conn, err := r.svc.Connect(params)
 	if err != nil {
-		response.Fail(c, 500, "连接 LDAP 失败: "+err.Error())
+		response.Fail(c, 500, "连接 LDAP 失败")
 		return
 	}
 	defer conn.Close()
 
 	svc := pkgldap.NewSchemaService()
-	list, err := svc.GetObjectClasses(conn)
+	list, err := svc.GetObjectClasses(conn.Conn)
 	if err != nil {
 		response.Fail(c, 500, err.Error())
 		return
@@ -36,13 +36,13 @@ func (r *Router) GetAttributeTypes(c *gin.Context) {
 	}
 	conn, err := r.svc.Connect(params)
 	if err != nil {
-		response.Fail(c, 500, "连接 LDAP 失败: "+err.Error())
+		response.Fail(c, 500, "连接 LDAP 失败")
 		return
 	}
 	defer conn.Close()
 
 	svc := pkgldap.NewSchemaService()
-	list, err := svc.GetAttributeTypes(conn)
+	list, err := svc.GetAttributeTypes(conn.Conn)
 	if err != nil {
 		response.Fail(c, 500, err.Error())
 		return
@@ -59,13 +59,13 @@ func (r *Router) GetObjectClass(c *gin.Context) {
 	}
 	conn, err := r.svc.Connect(params)
 	if err != nil {
-		response.Fail(c, 500, "连接 LDAP 失败: "+err.Error())
+		response.Fail(c, 500, "连接 LDAP 失败")
 		return
 	}
 	defer conn.Close()
 
 	svc := pkgldap.NewSchemaService()
-	oc, err := svc.GetObjectClassByName(conn, name)
+	oc, err := svc.GetObjectClassByName(conn.Conn, name)
 	if err != nil {
 		response.Fail(c, 500, err.Error())
 		return
@@ -82,13 +82,13 @@ func (r *Router) GetAttribute(c *gin.Context) {
 	}
 	conn, err := r.svc.Connect(params)
 	if err != nil {
-		response.Fail(c, 500, "连接 LDAP 失败: "+err.Error())
+		response.Fail(c, 500, "连接 LDAP 失败")
 		return
 	}
 	defer conn.Close()
 
 	svc := pkgldap.NewSchemaService()
-	at, err := svc.GetAttributeByName(conn, name)
+	at, err := svc.GetAttributeByName(conn.Conn, name)
 	if err != nil {
 		response.Fail(c, 500, err.Error())
 		return
@@ -111,13 +111,13 @@ func (r *Router) GetAllowedAttributes(c *gin.Context) {
 	}
 	conn, err := r.svc.Connect(params)
 	if err != nil {
-		response.Fail(c, 500, "连接 LDAP 失败: "+err.Error())
+		response.Fail(c, 500, "连接 LDAP 失败")
 		return
 	}
 	defer conn.Close()
 
 	svc := pkgldap.NewSchemaService()
-	must, may, err := svc.GetAllowedAttributes(conn, req.ObjectClasses)
+	must, may, err := svc.GetAllowedAttributes(conn.Conn, req.ObjectClasses)
 	if err != nil {
 		response.Fail(c, 500, err.Error())
 		return

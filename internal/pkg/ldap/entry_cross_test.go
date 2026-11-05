@@ -132,4 +132,3 @@ func TestFriendlyLdapError_WrapsLdapError(t *testing.T) {
 		t.Errorf("应该保留原始 LDAP 错误信息, 得到 %q", wrapped.Error())
 	}
 }
-

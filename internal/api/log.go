@@ -11,6 +11,11 @@ import (
 
 // GetLogs 获取操作日志
 func (r *Router) GetLogs(c *gin.Context) {
+	// 操作日志包含同服务器其他用户的操作 DN，仅管理员可见
+	if !r.svc.IsAdmin(middleware.GetUserDN(c)) {
+		response.Fail(c, 403, "无权限：仅管理员可查看操作日志")
+		return
+	}
 	serverID := middleware.GetServerID(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -23,7 +28,7 @@ func (r *Router) GetLogs(c *gin.Context) {
 
 	list, total, err := r.svc.GetLogDAO().List(serverID, page, pageSize)
 	if err != nil {
-		response.Fail(c, 500, err.Error())
+		response.Fail(c, 500, "获取操作日志失败")
 		return
 	}
 	if list == nil {

@@ -141,7 +141,10 @@ func TestGetRDN(t *testing.T) {
 // ========== 密码哈希测试 ==========
 
 func TestHashPassword_Plain(t *testing.T) {
-	result := HashPassword("", "mypassword")
+	result, err := HashPassword("", "mypassword")
+	if err != nil {
+		t.Fatalf("plain 不应报错: %v", err)
+	}
 	if result != "mypassword" {
 		t.Errorf("plain password 应该原样返回, 得到 %q", result)
 	}
@@ -149,7 +152,10 @@ func TestHashPassword_Plain(t *testing.T) {
 
 func TestHashPassword_SHA(t *testing.T) {
 	password := "test123"
-	result := HashPassword("SHA", password)
+	result, err := HashPassword("SHA", password)
+	if err != nil {
+		t.Fatalf("SHA 不应报错: %v", err)
+	}
 
 	if !strings.HasPrefix(result, "{SHA}") {
 		t.Errorf("SHA 密码应该以 {SHA} 开头, 得到 %q", result)
@@ -166,7 +172,10 @@ func TestHashPassword_SHA(t *testing.T) {
 
 func TestHashPassword_SSHA(t *testing.T) {
 	password := "securepass"
-	result := HashPassword("SSHA", password)
+	result, err := HashPassword("SSHA", password)
+	if err != nil {
+		t.Fatalf("SSHA 不应报错: %v", err)
+	}
 
 	if !strings.HasPrefix(result, "{SSHA}") {
 		t.Errorf("SSHA 密码应该以 {SSHA} 开头, 得到 %q", result)
@@ -179,9 +188,9 @@ func TestHashPassword_SSHA(t *testing.T) {
 		return
 	}
 
-	// SHA1 输出为 20 字节，后面跟 4 字节盐
-	if len(decoded) <= 20 {
-		t.Errorf("SSHA 解码后长度应该 > 20, 实际 %d", len(decoded))
+	// SHA1 输出为 20 字节，后面跟 8 字节盐
+	if len(decoded) != 28 {
+		t.Errorf("SSHA 解码后长度应为 20+8=28, 实际 %d", len(decoded))
 	}
 
 	salt := decoded[20:]
@@ -198,20 +207,43 @@ func TestHashPassword_SSHA(t *testing.T) {
 	}
 }
 
-func TestHashPassword_MD5(t *testing.T) {
-	password := "md5test"
-	result := HashPassword("MD5", password)
+func TestHashPassword_SSHA512(t *testing.T) {
+	result, err := HashPassword("SSHA512", "securepass")
+	if err != nil {
+		t.Fatalf("SSHA512 不应报错: %v", err)
+	}
+	if !strings.HasPrefix(result, "{SSHA512}") {
+		t.Errorf("SSHA512 密码应该以 {SSHA512} 开头, 得到 %q", result)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(result, "{SSHA512}"))
+	if err != nil {
+		t.Fatalf("base64 解码失败: %v", err)
+	}
+	if len(decoded) != 64+16 {
+		t.Errorf("SSHA512 长度应为 64+16=80, 实际 %d", len(decoded))
+	}
+}
 
-	if !strings.HasPrefix(result, "{MD5}") {
-		t.Errorf("MD5 密码应该以 {MD5} 开头, 得到 %q", result)
+func TestHashPassword_MD5Disabled(t *testing.T) {
+	if _, err := HashPassword("MD5", "md5test"); err == nil {
+		t.Error("MD5 已被禁用，应返回错误")
+	}
+}
+
+func TestHashPassword_Unsupported(t *testing.T) {
+	if _, err := HashPassword("BOGUS", "x"); err == nil {
+		t.Error("未知算法应返回错误")
 	}
 }
 
 func TestHashPassword_AlgoCaseInsensitive(t *testing.T) {
 	password := "caseTest"
-	r1 := HashPassword("sha", password)
-	r2 := HashPassword("SHA", password)
-	r3 := HashPassword("SHA}", password)
+	r1, err1 := HashPassword("sha", password)
+	r2, err2 := HashPassword("SHA", password)
+	r3, err3 := HashPassword("SHA}", password)
+	if err1 != nil || err2 != nil || err3 != nil {
+		t.Fatalf("SHA 大小写变体不应报错: %v %v %v", err1, err2, err3)
+	}
 
 	if r1 != r2 {
 		t.Errorf("sha 和 SHA 应该产生相同结果, %q != %q", r1, r2)

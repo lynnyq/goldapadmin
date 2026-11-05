@@ -14,8 +14,12 @@ var db *sql.DB
 // Init 初始化数据库
 func Init(dbPath string) error {
 	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	// 目录 0750、数据库文件 0600：SQLite 内含服务器配置与操作日志（用户 DN），需限制其他用户读取
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("create db dir: %w", err)
+	}
+	if err := os.Chmod(dir, 0750); err != nil {
+		return fmt.Errorf("chmod db dir: %w", err)
 	}
 
 	var err error
@@ -25,6 +29,11 @@ func Init(dbPath string) error {
 	}
 
 	db.SetMaxOpenConns(1)
+
+	// SQLite 首次打开才创建文件，此时收紧权限
+	if err := os.Chmod(dbPath, 0600); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("chmod db file: %w", err)
+	}
 
 	if err := migrate(); err != nil {
 		return fmt.Errorf("migrate: %w", err)
@@ -72,6 +81,10 @@ func migrate() error {
 			error_msg TEXT NOT NULL DEFAULT '',
 			duration_ms INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS jwt_blacklist (
+			token TEXT PRIMARY KEY,
+			expires_at DATETIME NOT NULL
 		)`,
 	}
 

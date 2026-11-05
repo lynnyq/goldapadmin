@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 
 func setupTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
+	auth.SetSecret("unit-test-secret-0123456789abcdefghijklmn")
 	r := gin.New()
 	r.Use(gin.Recovery())
 	return r
@@ -207,3 +209,84 @@ func TestStatusOK(t *testing.T) {
 		t.Errorf("status = %q, 期望 'ok'", body["status"])
 	}
 }
+
+// ========== 客户端 IP / 可信代理测试 ==========
+
+func TestClientIP_IgnoresXFFFromUntrustedRemote(t *testing.T) {
+	if err := SetTrustedProxies(nil); err != nil {
+		t.Fatalf("SetTrustedProxies 失败: %v", err)
+	}
+	req, _ := http.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "203.0.113.5:1234"
+	req.Header.Set("X-Forwarded-For", "1.1.1.1")
+	if ip := clientIP(req); ip != "203.0.113.5" {
+		t.Errorf("不可信来源应忽略 XFF，得到 %q", ip)
+	}
+}
+
+func TestClientIP_TrustedProxyParsesXFFRightToLeft(t *testing.T) {
+	if err := SetTrustedProxies([]string{"10.0.0.1"}); err != nil {
+		t.Fatalf("SetTrustedProxies 失败: %v", err)
+	}
+	req, _ := http.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "10.0.0.1:1234"
+	req.Header.Set("X-Forwarded-For", "6.6.6.6, 1.2.3.4, 10.0.0.1")
+	if ip := clientIP(req); ip != "1.2.3.4" {
+		t.Errorf("应从右向左剥离可信代理后取 1.2.3.4，得到 %q", ip)
+	}
+}
+
+func TestClientIP_TrustedProxyUsesXRealIPOnlyWhenNoXFF(t *testing.T) {
+	if err := SetTrustedProxies([]string{"10.0.0.1"}); err != nil {
+		t.Fatalf("SetTrustedProxies 失败: %v", err)
+	}
+	req, _ := http.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "10.0.0.1:1234"
+	req.Header.Set("X-Real-IP", "192.0.2.10")
+	if ip := clientIP(req); ip != "192.0.2.10" {
+		t.Errorf("可信代理场景应使用 X-Real-IP，得到 %q", ip)
+	}
+}
+
+func TestSetTrustedProxies_Invalid(t *testing.T) {
+	if err := SetTrustedProxies([]string{"not-an-ip"}); err == nil {
+		t.Error("非法可信代理应返回错误")
+	}
+}
+
+// ========== 安全响应头 / 请求体上限测试 ==========
+
+func TestSecurityHeaders(t *testing.T) {
+	r := setupTestRouter()
+	r.Use(SecurityHeaders())
+	r.GET("/test", statusOKHandler)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/test", nil)
+	r.ServeHTTP(w, req)
+
+	if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q", got)
+	}
+	if got := w.Header().Get("Content-Security-Policy"); got == "" {
+		t.Error("应下发 Content-Security-Policy")
+	}
+}
+
+func TestBodyLimit(t *testing.T) {
+	r := setupTestRouter()
+	r.Use(BodyLimit(16))
+	r.POST("/test", statusOKHandler)
+
+	w := httptest.NewRecorder()
+	body := strings.NewReader(strings.Repeat("a", 32))
+	req, _ := http.NewRequest("POST", "/test", body)
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("超限请求应返回 413, 得到 %d", w.Code)
+	}
+}
+
+func statusOKHandler(c *gin.Context) { StatusOK(c) }

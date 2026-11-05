@@ -9,8 +9,8 @@
 const attrLabels: Record<string, string> = {
   cn: '全称 (Common Name)',
   sn: '姓氏 (Surname)',
-  uid: '用户 ID',
-  uidnumber: '用户编号 (UID Number)',
+  uid: '用户名',
+  uidnumber: '用户 ID',
   gidnumber: '组编号 (GID Number)',
   homedirectory: '主目录 (Home Directory)',
   loginshell: '登录 Shell',

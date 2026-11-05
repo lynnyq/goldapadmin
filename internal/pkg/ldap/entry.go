@@ -1,12 +1,14 @@
 package ldap
 
 import (
-	"crypto/md5"
+	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"math/rand"
+	"hash"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,22 +21,25 @@ import (
 // BINARY_ATTRS 典型二进制属性（对标 phpLDAPadmin view_jpeg_photo.php / download_binary_attr.php）
 // 这些属性前端会以 base64 字符串传值，后端需解码为 []byte 走 BytesVals 路径
 var BINARY_ATTRS = map[string]struct{}{
-	"jpegphoto":        {},
-	"thumbnailphoto":   {},
-	"usercertificate":  {},
-	"userpkcs12":       {},
-	"cacertificate":     {},
-	"crosscertificatepair": {},
-	"certificaterevocationlist": {},
+	"jpegphoto":                          {},
+	"thumbnailphoto":                     {},
+	"usercertificate":                    {},
+	"userpkcs12":                         {},
+	"cacertificate":                      {},
+	"crosscertificatepair":               {},
+	"certificaterevocationlist":          {},
 	"authoritycertificaterevocationlist": {},
-	"audio":            {},
-	"supportedalgorithms": {},
+	"audio":                              {},
+	"supportedalgorithms":                {},
 }
 
 // ErrSizeLimitTruncated LDAP 搜索结果因服务器 sizelimit 被截断，
 // 但 Search / GetNextID 等函数仍返回了部分数据。
 // 调用方可用 errors.Is(err, ErrSizeLimitTruncated) 判断并决定是接受部分结果还是提示用户。
 var ErrSizeLimitTruncated = errors.New("LDAP search truncated by server size limit")
+
+// maxRecursiveDeleteCount 单次递归删除安全上限（条目数）
+const maxRecursiveDeleteCount = 1000
 
 // EntryService LDAP 条目操作服务
 type EntryService struct{}
@@ -48,6 +53,7 @@ func NewEntryService() *EntryService {
 //   - 若 result.Entries 非空 → 返回部分结果 + ErrSizeLimitTruncated sentinel error
 //   - 若 result.Entries 为空 → 返回原始错误
 //   - 非 SizeLimitExceeded 错误 → 原样返回
+//
 // 对标 phpLDAPadmin：即使被截断也渲染可见的部分结果，而不是白屏报错。
 func handleSizeLimit(result *ldap.SearchResult, err error) ([]*ldap.Entry, error) {
 	if err == nil {
@@ -65,9 +71,10 @@ func handleSizeLimit(result *ldap.SearchResult, err error) ([]*ldap.Entry, error
 // GetChildren 获取子节点列表（对标 phpLDAPadmin 树懒加载）
 //
 // 性能优化（消除 N+1 查询）：
-//  单次 sizeLimit=0 的 ScopeWholeSubtree 拿到 baseDN 下所有条目 DN（不算 baseDN 自己），
-//  构建 DN→是否有子孙 的倒排索引，O(1) 查出每个直接子节点的 HasChildren。
-//  代价：大目录下会拉全量 DN；目录节点数 >1000 时触发后端 sizelimit 保护。
+//
+//	单次 sizeLimit=0 的 ScopeWholeSubtree 拿到 baseDN 下所有条目 DN（不算 baseDN 自己），
+//	构建 DN→是否有子孙 的倒排索引，O(1) 查出每个直接子节点的 HasChildren。
+//	代价：大目录下会拉全量 DN；目录节点数 >1000 时触发后端 sizelimit 保护。
 //
 // 改进点：
 //  1. 排序按类型分组 + RDN 字母序
@@ -80,7 +87,7 @@ func (s *EntryService) GetChildren(conn *ldap.Conn, baseDN string) ([]model.Tree
 		baseDN,
 		ldap.ScopeWholeSubtree,
 		ldap.NeverDerefAliases,
-		0, 0, false,
+		MaxSubtreeEntries, 0, false,
 		"(objectClass=*)",
 		[]string{"dn", "objectClass", "userAccountControl"},
 		nil,
@@ -256,7 +263,7 @@ func (s *EntryService) GetTree(conn *ldap.Conn, baseDN string) ([]model.TreeNode
 		baseDN,
 		ldap.ScopeWholeSubtree,
 		ldap.NeverDerefAliases,
-		0, 0, false,
+		MaxSubtreeEntries, 0, false,
 		"(objectClass=*)",
 		[]string{"dn", "objectClass"},
 		nil,
@@ -273,8 +280,8 @@ func (s *EntryService) GetTree(conn *ldap.Conn, baseDN string) ([]model.TreeNode
 
 	// 构建 DN 集合（Lowercase 用于不区分大小写比较）+ 所有条目
 	type flatNode struct {
-		dn  string
-		oc  []string
+		dn string
+		oc []string
 	}
 	flatList := make([]flatNode, 0, len(result.Entries))
 	dnSet := make(map[string]struct{}, len(result.Entries))
@@ -378,6 +385,8 @@ func (s *EntryService) GetEntry(conn *ldap.Conn, dn string) (*model.LdapEntry, e
 			Values: attr.Values,
 		})
 	}
+	// 密码哈希等敏感属性在返回前脱敏，避免客户端拿到可离线爆破的凭据
+	MaskSensitiveAttributes(attributes)
 
 	return &model.LdapEntry{
 		DN:            entry.DN,
@@ -400,7 +409,11 @@ func (s *EntryService) CreateEntry(conn *ldap.Conn, dn string, attrs map[string]
 		if values, ok := attrs[attr]; ok && algo != "" && !strings.EqualFold(algo, "plain") {
 			hashed := make([]string, 0, len(values))
 			for _, v := range values {
-				hashed = append(hashed, HashPassword(algo, v))
+				h, hashErr := HashPassword(algo, v)
+				if hashErr != nil {
+					return fmt.Errorf("密码哈希失败: %w", hashErr)
+				}
+				hashed = append(hashed, h)
 			}
 			attrs[attr] = hashed
 		}
@@ -466,7 +479,7 @@ func (s *EntryService) GetNextID(conn *ldap.Conn, baseDN, kind string) (int, err
 		baseDN,
 		ldap.ScopeWholeSubtree,
 		ldap.NeverDerefAliases,
-		0, 0, false,
+		MaxSubtreeEntries, 0, false,
 		filter,
 		[]string{attr},
 		nil,
@@ -504,7 +517,11 @@ func (s *EntryService) ModifyEntry(conn *ldap.Conn, dn string, changes []model.M
 			if algo, ok := passwordAlgos[change.Attr]; ok && algo != "" && !strings.EqualFold(algo, "plain") {
 				hashed := make([]string, 0, len(values))
 				for _, v := range values {
-					hashed = append(hashed, HashPassword(algo, v))
+					h, hashErr := HashPassword(algo, v)
+					if hashErr != nil {
+						return fmt.Errorf("密码哈希失败: %w", hashErr)
+					}
+					hashed = append(hashed, h)
 				}
 				values = hashed
 			}
@@ -562,6 +579,11 @@ func isBinaryAttr(name string) bool {
 // DeleteEntry 删除条目
 func (s *EntryService) DeleteEntry(conn *ldap.Conn, dn string, recursive bool) error {
 	if recursive {
+		// 先预估将被删除的条目数，超过安全上限则拒绝执行
+		dns, err := s.ListDescendants(conn, dn)
+		if err == nil && len(dns) > maxRecursiveDeleteCount {
+			return fmt.Errorf("递归删除拒绝执行：目标条目下有 %d 个子条目，超过安全上限 %d，请缩小范围或联系管理员", len(dns), maxRecursiveDeleteCount)
+		}
 		// 先删除所有子条目
 		children, err := s.GetChildren(conn, dn)
 		if err == nil {
@@ -699,6 +721,7 @@ func (s *EntryService) Search(conn *ldap.Conn, baseDN, filter, scope string, att
 		for _, a := range e.Attributes {
 			attrs = append(attrs, model.LdapAttribute{Name: a.Name, Values: a.Values})
 		}
+		MaskSensitiveAttributes(attrs)
 		entries = append(entries, model.LdapEntry{
 			DN:            e.DN,
 			ObjectClasses: e.GetAttributeValues("objectClass"),
@@ -753,6 +776,9 @@ func (s *EntryService) CompareEntry(conn *ldap.Conn, dn, attr, value string) (bo
 // GetBinaryAttribute 获取指定条目上某个二进制属性的原始字节值
 // 前端用 base64 编码展示 / 下载
 func (s *EntryService) GetBinaryAttribute(conn *ldap.Conn, dn, attr string) ([]byte, error) {
+	if IsSensitiveAttribute(attr) {
+		return nil, fmt.Errorf("属性 %s 属于敏感凭据属性，禁止直接读取", attr)
+	}
 	searchReq := ldap.NewSearchRequest(
 		dn,
 		ldap.ScopeBaseObject, ldap.NeverDerefAliases,
@@ -781,7 +807,7 @@ func (s *EntryService) ListDescendants(conn *ldap.Conn, baseDN string) ([]string
 	searchReq := ldap.NewSearchRequest(
 		baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
-		0, 0, false,
+		MaxSubtreeEntries, 0, false,
 		"(objectClass=*)",
 		[]string{"dn"},
 		nil,
@@ -807,9 +833,14 @@ func (s *EntryService) BatchDelete(conn *ldap.Conn, dns []string, recursive bool
 		err := s.DeleteEntry(conn, dn, recursive)
 		duration := time.Since(start)
 		results = append(results, model.BatchResultItem{
-			DN:       dn,
-			Success:  err == nil,
-			Error:    func() string { if err != nil { return err.Error() }; return "" }(),
+			DN:      dn,
+			Success: err == nil,
+			Error: func() string {
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}(),
 			Duration: duration,
 		})
 	}
@@ -858,26 +889,41 @@ func (s *EntryService) BatchModify(conn *ldap.Conn, dns []string, op string, att
 	return results, nil
 }
 
-// HashPassword 哈希密码
-func HashPassword(algo, password string) string {
-	algo = strings.ToUpper(strings.TrimPrefix(strings.TrimSuffix(algo, "}"), "{"))
+// HashPassword 按指定算法哈希密码
+//
+// 参数：algo 算法名（SSHA / SSHA256 / SSHA512 / SHA / PLAIN）、password 明文密码
+// 返回：LDAP 密码哈希字符串；不支持的算法返回错误
+// 错误说明：MD5 已禁用（碰撞与离线爆破风险），盐使用 crypto/rand 生成
+func HashPassword(algo, password string) (string, error) {
+	algo = strings.ToUpper(strings.TrimPrefix(strings.TrimSuffix(strings.TrimSpace(algo), "}"), "{"))
 	switch algo {
+	case "", "PLAIN", "CLEAR":
+		return password, nil
 	case "SSHA":
-		salt := make([]byte, 4)
-		rand.Read(salt)
-		h := sha1.New()
-		h.Write([]byte(password))
-		h.Write(salt)
-		return "{SSHA}" + base64.StdEncoding.EncodeToString(append(h.Sum(nil), salt...))
+		return saltedHash("{SSHA}", sha1.New, 8, password)
+	case "SSHA256":
+		return saltedHash("{SSHA256}", sha256.New, 8, password)
+	case "SSHA512":
+		return saltedHash("{SSHA512}", sha512.New, 16, password)
 	case "SHA":
 		h := sha1.New()
 		h.Write([]byte(password))
-		return "{SHA}" + base64.StdEncoding.EncodeToString(h.Sum(nil))
+		return "{SHA}" + base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
 	case "MD5":
-		h := md5.New()
-		h.Write([]byte(password))
-		return "{MD5}" + base64.StdEncoding.EncodeToString(h.Sum(nil))
+		return "", errors.New("MD5 密码哈希已禁用，请使用 SSHA512/SSHA256")
 	default:
-		return password
+		return "", fmt.Errorf("不支持的密码哈希算法: %s", algo)
 	}
+}
+
+// saltedHash 生成加盐哈希（格式：{ALGO}base64(digest + salt)）
+func saltedHash(prefix string, newHash func() hash.Hash, saltLen int, password string) (string, error) {
+	salt := make([]byte, saltLen)
+	if _, err := rand.Read(salt); err != nil {
+		return "", fmt.Errorf("生成随机盐失败: %w", err)
+	}
+	h := newHash()
+	h.Write([]byte(password))
+	h.Write(salt)
+	return prefix + base64.StdEncoding.EncodeToString(append(h.Sum(nil), salt...)), nil
 }

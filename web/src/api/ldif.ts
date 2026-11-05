@@ -19,11 +19,11 @@ export interface LdifImportResult {
 }
 
 /**
- * 生成 TraceID：与 request.ts 拦截器保持一致，优先复用 localStorage
+ * 生成 TraceID：与 request.ts 拦截器保持一致，优先复用 sessionStorage
  */
 function getTraceID(): string {
   return (
-    localStorage.getItem('traceId') ||
+    sessionStorage.getItem('traceId') ||
     `trace-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
   )
 }
@@ -56,7 +56,7 @@ async function parseError(bodyText: string, httpStatus: number, traceId: string)
  * @returns 下载的文件名（从 Content-Disposition 解析）
  */
 export async function exportLdif(dn: string, recursive = true): Promise<string> {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   if (!token) throw new Error('未登录')
 
   const traceId = getTraceID()
@@ -72,7 +72,7 @@ export async function exportLdif(dn: string, recursive = true): Promise<string> 
   // 401 统一处理：与 request.ts 拦截器逻辑保持一致
   if (resp.status === 401) {
     if (!window.location.pathname.startsWith('/login')) {
-      localStorage.removeItem('token')
+      sessionStorage.removeItem('token')
       const bodyText = await resp.text().catch(() => '')
       const msg = await parseError(bodyText, 401, traceId)
       // 用 setTimeout 确保消息先弹出再跳转

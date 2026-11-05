@@ -4,9 +4,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	pkgldap "github.com/lynnyq/goldapadmin/internal/pkg/ldap"
 	"github.com/lynnyq/goldapadmin/internal/pkg/middleware"
 	"github.com/lynnyq/goldapadmin/internal/pkg/response"
-	pkgldap "github.com/lynnyq/goldapadmin/internal/pkg/ldap"
 )
 
 // GetMonitorStats 获取监控统计

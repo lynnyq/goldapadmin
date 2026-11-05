@@ -22,10 +22,15 @@ export const useServerStore = defineStore('server', () => {
    *
    * 从后端拉取全部服务器配置并写入 servers。
    * 保证赋值结果是数组，即使后端返回 null 也降级为空数组。
+   * 请求失败时静默降级为空数组（可能是权限或网络问题，不阻断主界面渲染）。
    */
   async function loadServers() {
-    const list = await getServers()
-    servers.value = Array.isArray(list) ? list : []
+    try {
+      const list = await getServers()
+      servers.value = Array.isArray(list) ? list : []
+    } catch {
+      servers.value = []
+    }
   }
 
   /**

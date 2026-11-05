@@ -210,7 +210,9 @@ log:
   level: info             # debug 只在排障时临时打开
 
 security:
-  skip_tls_verify: false  # 生产必须校验 LDAP 证书
+  # 是否强制 LDAP 使用 TLS/SSL（生产建议 true）
+  # TLS 证书校验由各 LdapServer 记录的 skip_tls_verify 字段控制
+  require_ldap_tls: true
   cors:
     origins:
       - "https://ldapadmin.yourcompany.com"
@@ -540,8 +542,8 @@ error="ldap: connection refused"
 error="ldap: x509: certificate signed by unknown authority"
 ```
 
-- 证书不自签 → `security.skip_tls_verify: false` 必须生效
-- 自签证书临时用 → 在 Web UI 的 LdapServer 记录上勾选 skip TLS verify（生产 **不推荐**）
+- 证书需被系统信任 → 在 Web UI 的 LdapServer 记录上保持 `skip_tls_verify: false`
+- 自签证书临时用 → 在该服务器记录上开启 skip TLS verify（生产 **不推荐**）
 - 连通性测试：`nc -vz <ldap-host> 636`
 
 ### 12.5 CORS 错误
@@ -577,7 +579,7 @@ sudo systemctl restart goldapadmin
 | 5 | **8080 不对公网** | `sudo firewall-cmd --list-all` → 只有 80/443 |
 | 6 | **SQLite 权限** | `ls -l /appdata/goldapadmin/data/` → owner `ldap`，mode `0750` |
 | 7 | **config.yaml 权限** | `ls -l /appdata/goldapadmin/config/config.yaml` → mode `0640` |
-| 8 | **LDAP TLS 不跳过验证** | `grep skip_tls_verify /appdata/goldapadmin/config/config.yaml` → `false` |
+| 8 | **LDAP 强制 TLS** | `grep require_ldap_tls /appdata/goldapadmin/config/config.yaml` → `true`，且各服务器记录未开启 skip_tls_verify |
 | 9 | **日志级别 info 或 warn** | `grep level /appdata/goldapadmin/config/config.yaml` |
 | 10 | **systemd 沙箱生效** | `systemd-analyze security goldapadmin` 确认各项不显示 OFF |
 | 11 | **文件描述符充足** | `cat /proc/$(pidof goldapadmin)/limits \| grep "open files"` → ≥ 65536 |

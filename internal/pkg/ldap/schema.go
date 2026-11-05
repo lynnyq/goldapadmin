@@ -226,11 +226,11 @@ var (
 	ocNamesRegexp = regexp.MustCompile(`NAME\s+\(([^)]+)\)`)
 	ocDescRegexp  = regexp.MustCompile(`DESC\s+'([^']*)'`)
 	// MUST/MAY 正则优先匹配括号包裹的多值列表，再匹配简单标识符
-	ocMustRegexp  = regexp.MustCompile(`MUST\s+(?:\(([^)]+)\)|([A-Za-z][A-Za-z0-9_-]*))`)
-	ocMayRegexp   = regexp.MustCompile(`MAY\s+(?:\(([^)]+)\)|([A-Za-z][A-Za-z0-9_-]*))`)
+	ocMustRegexp = regexp.MustCompile(`MUST\s+(?:\(([^)]+)\)|([A-Za-z][A-Za-z0-9_-]*))`)
+	ocMayRegexp  = regexp.MustCompile(`MAY\s+(?:\(([^)]+)\)|([A-Za-z][A-Za-z0-9_-]*))`)
 	// SUP 正则只匹配 objectClass 名称，遇到 STRUCTURAL/AUXILIARY/ABSTRACT/MUST/MAY 关键字时停止
-	ocSupRegexp   = regexp.MustCompile(`SUP\s+([A-Za-z][A-Za-z0-9.$_-]*(?:\s+[A-Za-z][A-Za-z0-9.$_-]*)*)`)
-	ocOIDRegexp   = regexp.MustCompile(`^\s*([\d.]+)`)
+	ocSupRegexp = regexp.MustCompile(`SUP\s+([A-Za-z][A-Za-z0-9.$_-]*(?:\s+[A-Za-z][A-Za-z0-9.$_-]*)*)`)
+	ocOIDRegexp = regexp.MustCompile(`^\s*([\d.]+)`)
 )
 
 // ocSupStopWords SUP 匹配时的停止词，遇到这些词就不再继续匹配
@@ -238,11 +238,11 @@ var ocSupStopWords = []string{"STRUCTURAL", "AUXILIARY", "ABSTRACT", "MUST", "MA
 
 func parseObjectClass(def string) model.ObjectClassDef {
 	oc := model.ObjectClassDef{
-		Type:      "structural",
-		Names:     []string{},
-		Must:      []string{},
-		May:       []string{},
-		Superior:  []string{},
+		Type:     "structural",
+		Names:    []string{},
+		Must:     []string{},
+		May:      []string{},
+		Superior: []string{},
 	}
 
 	if m := ocOIDRegexp.FindStringSubmatch(def); len(m) > 1 {

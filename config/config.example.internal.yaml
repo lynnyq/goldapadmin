@@ -23,9 +23,22 @@ log:
   level: info
 
 security:
-  # 内网自建 CA 无法被系统信任时，可全局允许跳过校验
-  # 更推荐：将自建 CA 根证书导入服务器系统信任库，然后设为 false
-  skip_tls_verify: true
+  # 是否强制 LDAP 连接使用 TLS/SSL（默认 false；内网若为 389 明文则保持 false）
+  require_ldap_tls: false
+  # 自签名证书是否跳过校验由每个 LdapServer 记录的 skip_tls_verify 字段控制
+
+  # 是否允许匿名（无 BindDN）登录；默认 false
+  allow_anonymous_bind: false
+  # 允许管理服务器配置的登录 DN 白名单；为空 = 对所有用户关闭管理接口
+  admin_dns:
+    - "uid=admin,ou=system,dc=company,dc=com"
+  # 可信反向代理；位于 Nginx 之后时填写其地址（如 127.0.0.1）
+  trusted_proxies:
+    - "127.0.0.1"
+  # 单请求体上限（字节），默认 2MiB
+  max_body_bytes: 2097152
+  # 只读模式：开启后禁止创建/修改/删除/移动/复制条目与 LDIF 导入
+  read_only: false
 
   cors:
     # 内网办公网域名 / VIP

@@ -1,11 +1,17 @@
 package auth
 
 import (
+	"os"
 	"testing"
 	"time"
 )
 
 // ========== JWT 生成与解析测试 ==========
+
+func TestMain(m *testing.M) {
+	SetSecret("unit-test-secret-0123456789abcdefghijklmn")
+	os.Exit(m.Run())
+}
 
 func TestGenerateAndParseToken(t *testing.T) {
 	serverID := 1
@@ -78,13 +84,13 @@ func TestGenerateToken_MultipleTokens(t *testing.T) {
 }
 
 func TestSetSecret(t *testing.T) {
-	oldSecret := jwtSecret
-	defer func() { jwtSecret = oldSecret }()
+	oldSecret := string(getSecret())
+	defer func() { SetSecret(oldSecret) }()
 
-	newSecret := "my-new-secret-key-12345"
+	newSecret := "my-new-secret-key-1234567890abcdef"
 	SetSecret(newSecret)
 
-	if string(jwtSecret) != newSecret {
+	if string(getSecret()) != newSecret {
 		t.Errorf("SetSecret 应该更新密钥")
 	}
 
@@ -103,9 +109,9 @@ func TestSetSecret(t *testing.T) {
 }
 
 func TestSetSecret_EmptyDoesNotChange(t *testing.T) {
-	oldSecret := string(jwtSecret)
+	oldSecret := string(getSecret())
 	SetSecret("")
-	if string(jwtSecret) != oldSecret {
+	if string(getSecret()) != oldSecret {
 		t.Error("空密钥不应该改变已有密钥")
 	}
 }

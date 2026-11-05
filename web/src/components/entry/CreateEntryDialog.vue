@@ -91,7 +91,7 @@
       </template>
 
       <el-form-item label="RDN 值" prop="rdnValue">
-        <el-input v-model="form.rdnValue" :placeholder="`条目 RDN，如 ${form.rdnAttr}=zhangsan 的值`" />
+        <el-input v-model="form.rdnValue" :placeholder="`${form.rdnAttr} 的属性值，如 zhangsan`" />
       </el-form-item>
 
       <el-divider content-position="left">属性</el-divider>
@@ -714,10 +714,45 @@ async function loadFields(tpl?: TemplateDef) {
     //            POSIX 组模板取下一可用 ID（GetNextNumber）
     const isPosixAcct = !!tpl?.objectClasses.some((oc) => oc.toLowerCase() === 'posixaccount')
     autoFillIDs(isPosixAcct ? 'first-group' : 'next')
+
+    // POSIX 账户模板：按用户期望顺序重排字段
+    // 用户 ID (uidNumber) → 用户名 (uid) → 密码 (userPassword) → 组编号 (gidNumber)
+    // → 姓氏 (sn) → 名 (givenName) → 主目录 (homeDirectory) → 登录 Shell (loginShell)
+    if (tpl && isPosixAcct) {
+      reorderPosixAccountFields()
+    }
   } catch {
     form.fields = [{ name: 'cn', value: '', must: true, algo: undefined }]
     form.rdnValue = ''
   }
+}
+
+/**
+ * POSIX 账户模板字段重排 — 按用户期望的顺序展示核心属性
+ * 用户 ID (uidNumber) → 用户名 (uid) → 密码 (userPassword) → 组编号 (gidNumber)
+ * → 姓氏 (sn) → 名 (givenName) → 主目录 (homeDirectory) → 登录 Shell (loginShell)
+ * 未在上述列表中的字段保持原有顺序，追加在末尾。
+ */
+function reorderPosixAccountFields() {
+  const preferredOrder = [
+    'uidnumber',
+    'uid',
+    'userpassword',
+    'gidnumber',
+    'sn',
+    'givenname',
+    'homedirectory',
+    'loginshell',
+  ]
+  const orderIndex = new Map(preferredOrder.map((n, i) => [n, i]))
+  form.fields.sort((a, b) => {
+    const ai = orderIndex.get(a.name.toLowerCase())
+    const bi = orderIndex.get(b.name.toLowerCase())
+    if (ai !== undefined && bi !== undefined) return ai - bi
+    if (ai !== undefined) return -1  // a 在目标顺序中，b 不在 → a 在前
+    if (bi !== undefined) return 1   // b 在目标顺序中，a 不在 → b 在前
+    return 0                          // 都不在 → 保持相对顺序
+  })
 }
 
 /** 自动填充 uidNumber/gidNumber

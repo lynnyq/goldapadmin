@@ -19,13 +19,13 @@ const service: AxiosInstance = axios.create({
 // 请求拦截器：附加认证 Token 与 TraceID
 service.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
     // 生成 TraceID：优先复用已有值，否则按 trace-时间戳-随机串 生成
     config.headers['X-Trace-ID'] =
-      localStorage.getItem('traceId') ||
+      sessionStorage.getItem('traceId') ||
       `trace-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
     return config
   },
@@ -49,7 +49,7 @@ service.interceptors.response.use(
       }
       // 401 但已在登录页，不再重复跳转，避免无限循环
       if (res.code === 401 && !isOnLoginPage()) {
-        localStorage.removeItem('token')
+        sessionStorage.removeItem('token')
         ElMessage.error(res.message || '登录已过期，请重新登录')
         window.location.href = '/login'
         return Promise.reject(new Error(res.message || 'Unauthorized'))
@@ -64,7 +64,7 @@ service.interceptors.response.use(
     const status = error.response?.status
     if (status === 401 && !isOnLoginPage()) {
       // HTTP 401：清理 token 并跳转登录页（登录页内不跳转）
-      localStorage.removeItem('token')
+      sessionStorage.removeItem('token')
       window.location.href = '/login'
       ElMessage.error('登录已过期，请重新登录')
     } else if (status !== 401) {

@@ -10,15 +10,18 @@ import (
 // CORS 跨域中间件：基于白名单允许跨域
 //
 // origins 为允许的 Origin 列表；传入空数组时，不设置任何 CORS 头（即只允许同源请求）。
-// 支持通配符 "*" 表示允许所有来源（开发便利，生产环境禁止）。
-func CORS(origins []string) gin.HandlerFunc {
+// 通配符 "*" 仅在非 release 模式下生效；release 模式会忽略 "*"，必须显式配置域名。
+// 认证使用 Authorization header（非 Cookie），因此不再返回 Allow-Credentials，降低 CSRF/XSS 面。
+func CORS(origins []string, release bool) gin.HandlerFunc {
 	// 构建快速查找 map
 	allowAll := false
 	originSet := make(map[string]struct{}, len(origins))
 	for _, o := range origins {
 		o = strings.TrimSpace(o)
 		if o == "*" {
-			allowAll = true
+			if !release {
+				allowAll = true
+			}
 		} else if o != "" {
 			originSet[strings.ToLower(o)] = struct{}{}
 		}
@@ -45,7 +48,6 @@ func CORS(origins []string) gin.HandlerFunc {
 			c.Header("Vary", "Origin")
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Trace-ID")
-			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Access-Control-Max-Age", "86400")
 		}
 

@@ -49,6 +49,8 @@ export interface LdapServer {
 export interface LoginRequest {
   /** 已保存服务器配置 ID（与 host 二选一） */
   server_id?: number
+  /** 记住服务器时可选的连接名称（为空则用 Host 兜底） */
+  name?: string
   /** 手动输入的主机地址 */
   host?: string
   /** 手动输入的端口 */

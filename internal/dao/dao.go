@@ -208,8 +208,8 @@ func (d *LogDAO) CountByAction(serverID int) (map[string]int, error) {
 
 // RecentResponseTimes 获取最近响应时间
 func (d *LogDAO) RecentResponseTimes(serverID, limit int) ([]struct {
-	Time   string `json:"time"`
-	AvgMS  int64  `json:"avg_ms"`
+	Time  string `json:"time"`
+	AvgMS int64  `json:"avg_ms"`
 }, error) {
 	rows, err := db.Query(`SELECT strftime('%H:%M:%S', created_at) as t, duration_ms FROM operation_logs WHERE server_id=? ORDER BY id DESC LIMIT ?`, serverID, limit)
 	if err != nil {

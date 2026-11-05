@@ -125,8 +125,22 @@
             <!-- 复选框选项（inline 但不挤） -->
             <div class="form-checks">
               <el-checkbox v-model="form.use_tls">使用 StartTLS 加密连接</el-checkbox>
-              <el-checkbox v-model="form.remember">记住此服务器</el-checkbox>
+              <el-checkbox v-model="form.remember" :disabled="!!form.server_id">记住此服务器</el-checkbox>
             </div>
+
+            <!-- 勾选记住后显示连接名称输入框（仅手动填写模式可用；已保存的服务器不需要再命名） -->
+            <el-form-item
+              v-if="form.remember && !form.server_id"
+              label="连接名称"
+              class="remember-name"
+            >
+              <el-input
+                v-model="form.name"
+                :placeholder="`如 开发环境 LDAP、公司 AD，留空则用 ${form.host || '主机地址'}`"
+                maxlength="64"
+                show-word-limit
+              />
+            </el-form-item>
           </div>
 
           <!-- 提交 -->
@@ -163,8 +177,8 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Lock, ArrowRight, Connection } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/store/auth'
 import { useServerStore } from '@/store/server'
-import { getServers } from '@/api/server'
-import type { LoginRequest, LdapServer } from '@/types'
+import { getPublicServers, type PublicServerInfo } from '@/api/server'
+import type { LoginRequest } from '@/types'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -172,11 +186,12 @@ const serverStore = useServerStore()
 
 const formRef = ref<FormInstance>()    // 表单实例引用，用于触发整体校验
 const loading = ref(false)             // 登录请求进行中，控制提交按钮 loading 态
-const servers = ref<LdapServer[]>([])  // 后端已保存的服务器配置列表
+const servers = ref<PublicServerInfo[]>([])  // 登录页可用的服务器（仅最小字段）
 
 // 表单数据
 const form = ref<LoginRequest>({
   server_id: undefined,
+  name: '',
   host: '', port: 389, base_dn: '',
   bind_dn: '', password: '',
   use_tls: false, remember: false,
@@ -191,7 +206,7 @@ const rules: FormRules = {
 /** 页面挂载后加载已保存的服务器列表；有则默认选中第一个并自动填充连接参数 */
 onMounted(async () => {
   try {
-    servers.value = await getServers()
+    servers.value = await getPublicServers()
     // 有保存的连接 → 默认选中第一个并自动填充连接参数
     if (servers.value.length > 0) {
       onServerChange(servers.value[0].id)
@@ -201,7 +216,9 @@ onMounted(async () => {
 })
 
 /**
- * 选择服务器 → 自动填充连接参数（host/port/base_dn/bind_dn/TLS）
+ * 选择服务器 → 自动填充连接参数（host/port/TLS）
+ *
+ * 出于安全考虑，公开接口不返回 bind_dn / base_dn，需用户手动填写绑定 DN。
  * @param id 选中的服务器配置 ID
  * @returns 无返回值
  */
@@ -211,10 +228,11 @@ function onServerChange(id: number) {
     form.value.server_id = s.id
     form.value.host      = s.host
     form.value.port      = s.port
-    form.value.base_dn   = s.base_dn
-    form.value.bind_dn   = s.bind_dn   // 补上：DB 存了 bind_dn，自动带出
     form.value.use_tls   = s.use_tls
+    form.value.bind_dn   = ''          // 不自动带出管理员 DN，需手动输入
     form.value.password  = ''          // 强制重新输入（密码不存 DB）
+    form.value.remember  = false       // 已保存的服务器无需再"记住"
+    form.value.name      = ''
   }
 }
 

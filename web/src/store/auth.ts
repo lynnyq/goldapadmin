@@ -1,8 +1,9 @@
 /**
  * 认证状态 Store
  *
- * 管理登录令牌、当前用户 DN 与服务器名称，并同步持久化到 localStorage，
- * 保证页面刷新后登录态不丢失。注意：密码不落盘，仅服务端会话缓存凭据。
+ * 管理登录令牌、当前用户 DN 与服务器名称，并同步持久化到 sessionStorage，
+ * 保证同一标签页刷新后登录态不丢失（关闭标签页即清除，降低 token 被长期窃取的风险）。
+ * 注意：密码不落盘，仅服务端会话缓存凭据。
  */
 import { defineStore } from 'pinia'
 import { login as apiLogin, logout as apiLogout } from '@/api/server'
@@ -20,9 +21,9 @@ interface AuthState {
 
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
-    token: localStorage.getItem('token') || '',
-    userDN: localStorage.getItem('userDN') || '',
-    serverName: localStorage.getItem('serverName') || '',
+    token: sessionStorage.getItem('token') || '',
+    userDN: sessionStorage.getItem('userDN') || '',
+    serverName: sessionStorage.getItem('serverName') || '',
   }),
   actions: {
     /**
@@ -39,9 +40,9 @@ export const useAuthStore = defineStore('auth', {
       this.token = res.token
       this.userDN = res.user_dn
       this.serverName = res.server?.name || ''
-      localStorage.setItem('token', res.token)
-      localStorage.setItem('userDN', res.user_dn)
-      localStorage.setItem('serverName', this.serverName)
+      sessionStorage.setItem('token', res.token)
+      sessionStorage.setItem('userDN', res.user_dn)
+      sessionStorage.setItem('serverName', this.serverName)
       return res
     },
     /**
@@ -59,9 +60,9 @@ export const useAuthStore = defineStore('auth', {
       this.token = ''
       this.userDN = ''
       this.serverName = ''
-      localStorage.removeItem('token')
-      localStorage.removeItem('userDN')
-      localStorage.removeItem('serverName')
+      sessionStorage.removeItem('token')
+      sessionStorage.removeItem('userDN')
+      sessionStorage.removeItem('serverName')
     },
   },
 })

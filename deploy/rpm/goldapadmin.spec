@@ -23,17 +23,11 @@
 
 %define debug_package %{nil}
 
-# Fallback defaults — build-rpm.sh overrides these via --define.
-%ifndef version
-%define version 0.1.0
-%endif
-%ifndef release
-%define release 1
-%endif
-
+# Version / Release are rewritten in-place by build-rpm.sh via sed
+# (rpm 4.14 on Kylin/openEuler does not support %ifndef, so we avoid it).
 Name:           goldapadmin
-Version:        %{version}
-Release:        %{release}%{?dist}
+Version:        0.1.0
+Release:        1%{?dist}
 Summary:        GoLDAPAdmin - Lightweight web-based LDAP directory management tool
 
 License:        MIT

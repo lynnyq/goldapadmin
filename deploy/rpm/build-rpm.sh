@@ -112,6 +112,14 @@ rm -rf "$RPM_BUILDROOT"
 mkdir -p "$RPM_BUILDROOT"/{BUILD,RPMS,SOURCES,SPECS,tmp}
 
 cp "$SCRIPT_DIR/goldapadmin.spec"             "$RPM_BUILDROOT/SPECS/"
+# 用 sed 原地替换 Version / Release，兼容 rpm 4.14 (Kylin/openEuler)
+# 不依赖 --define 宏覆盖，彻底规避 %ifndef 等旧版不支持的指令
+sed -i.bak \
+    -e "s/^Version:.*/Version:        ${VERSION}/" \
+    -e "s/^Release:.*/Release:        ${RELEASE}%{?dist}/" \
+    "$RPM_BUILDROOT/SPECS/goldapadmin.spec"
+rm -f "$RPM_BUILDROOT/SPECS/goldapadmin.spec.bak"
+
 cp "$SCRIPT_DIR/goldapadmin.service.rpm"       "$RPM_BUILDROOT/SOURCES/goldapadmin.service.rpm"
 
 # 把 config.example.prod.yaml 当示例配置拷过去
@@ -148,8 +156,6 @@ for i in "${!SPEC_ARCHS[@]}"; do
     rpmbuild \
         --define "_topdir $RPM_BUILDROOT" \
         --define "_bin_arch $bin_arch" \
-        --define "version $VERSION" \
-        --define "release $RELEASE" \
         --target "$arch" \
         -bb SPECS/goldapadmin.spec
 

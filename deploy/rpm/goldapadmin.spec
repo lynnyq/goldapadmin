@@ -23,9 +23,17 @@
 
 %define debug_package %{nil}
 
+# Fallback defaults — build-rpm.sh overrides these via --define.
+%ifndef version
+%define version 0.1.0
+%endif
+%ifndef release
+%define release 1
+%endif
+
 Name:           goldapadmin
-Version:        0.1.0
-Release:        1%{?dist}
+Version:        %{version}
+Release:        %{release}%{?dist}
 Summary:        GoLDAPAdmin - Lightweight web-based LDAP directory management tool
 
 License:        MIT

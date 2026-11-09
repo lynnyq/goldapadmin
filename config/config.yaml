@@ -21,7 +21,7 @@ security:
   # 是否允许匿名（无 BindDN）登录，默认 false
   allow_anonymous_bind: false
   # 允许管理服务器配置的登录 DN 白名单；为空时服务器配置管理接口对所有用户关闭
-  admin_dns: []
+  admin_dns: ["cn=Manager,dc=example,dc=com"]
   # 可信反向代理（如本机 nginx 127.0.0.1）；只有来自这些地址才解析 X-Forwarded-For
   trusted_proxies: []
   # 单请求体上限（字节），默认 2MiB

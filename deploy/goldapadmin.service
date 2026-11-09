@@ -24,28 +24,11 @@ RestartSec=5
 StartLimitIntervalSec=60
 StartLimitBurst=3
 
-# ---- 进程保护（生产安全加固） ----
-# 以下选项在 systemd 232+ 可用，最大限度降低进程权限
+# ---- 基础进程保护 ----
+# 以下选项兼容大多数 systemd 版本（>= 190）
+# 生产环境使用非 root 用户 + 基础隔离即可满足安全要求
 
-# 禁止提权
-NoNewPrivileges=true
-
-# 限制进程可写路径（只允许工作目录 + 系统日志目录）
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/goldapadmin/data /var/log/goldapadmin
-
-# 禁止访问内核参数和内核日志
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectKernelLogs=true
-
-# 控制组命名空间隔离
-ProtectControlGroups=true
-ProtectMounts=true
-
-# 限制网络能力（仅保留必要的）
-# ldap:389, ldaps:636 需要 TCP 出站；HTTP 服务本身不需要特殊能力
+# 临时目录和设备隔离
 PrivateTmp=true
 PrivateDevices=true
 
@@ -53,12 +36,6 @@ PrivateDevices=true
 LimitNOFILE=65536
 LimitNPROC=4096
 LimitCORE=0
-
-# 安全上下文（如果可用）
-ProtectClock=true
-ProtectHostname=true
-MemoryDenyWriteExecute=true
-RestrictRealtime=true
 
 # ---- 日志 ----
 # 标准输出/错误写入 systemd journal（go-ldapadmin 自带日志已包含 trace_id）
@@ -71,6 +48,21 @@ SyslogIdentifier=goldapadmin
 # systemd 256+ 支持 HTTP GET 健康检查
 # 生产环境建议配 Nginx 反代后用 nginx 做 upstream 健康检查
 # 这里留空，依赖 systemd 的 Restart=on-failure
+
+# ---- 可选安全加固（需要 systemd >= 232，按需启用） ----
+# ProtectSystem=strict
+# ProtectHome=true
+# ProtectKernelTunables=true
+# ProtectKernelModules=true
+# ProtectKernelLogs=true
+# ProtectControlGroups=true
+# ProtectMounts=true
+# ProtectClock=true
+# ProtectHostname=true
+# MemoryDenyWriteExecute=true
+# RestrictRealtime=true
+# NoNewPrivileges=true
+# ReadWritePaths=/opt/goldapadmin/data /var/log/goldapadmin
 
 [Install]
 WantedBy=multi-user.target

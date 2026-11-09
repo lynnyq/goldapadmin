@@ -336,8 +336,45 @@ function handleNodeCollapse(data: TreeNode) {
 }
 
 // ==================== 展开/收起全部 ====================
-function expandAllNodes() { treeRef.value?.store?.setAllExpandable(true, true) }
-function collapseAllNodes() { treeRef.value?.store?.setAllExpandable(true, false) }
+// 懒加载模式下 store.setAllExpandable 只对已实例化节点生效，
+// 需要递归遍历所有已加载节点逐个调用 expand()/collapse()
+function forEachLoadedNode(node: any, fn: (n: any) => void) {
+  if (!node) return
+  fn(node)
+  if (node.childNodes && node.childNodes.length) {
+    for (const child of node.childNodes) forEachLoadedNode(child, fn)
+  }
+}
+
+function expandAllNodes() {
+  const tree = treeRef.value
+  if (!tree) return
+  // 懒加载模式下展开全部已加载节点；对未加载节点触发 load
+  const all: string[] = []
+  forEachLoadedNode(tree.store.root, (n) => {
+    if (!n.expanded && n.childNodes) {
+      n.expand()
+      if (n.data?.dn) all.push(n.data.dn)
+    }
+  })
+  // 记录新展开的节点
+  if (all.length) {
+    const merged = Array.from(new Set([...savedExpanded.value, ...all]))
+    savedExpanded.value = merged
+    saveExpandedKeys(merged)
+  }
+}
+
+function collapseAllNodes() {
+  const tree = treeRef.value
+  if (!tree) return
+  forEachLoadedNode(tree.store.root, (n) => {
+    if (n.expanded) n.collapse()
+  })
+  // 清空持久化的展开记录
+  savedExpanded.value = []
+  saveExpandedKeys([])
+}
 
 // ==================== 拖拽移动 ====================
 function allowDrag(draggingNode: any) {

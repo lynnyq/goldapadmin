@@ -119,7 +119,11 @@
     <!-- Three-column body -->
     <el-container class="main-body">
       <!-- Left: tree -->
-      <el-aside :width="leftCollapsed ? '44px' : '260px'" class="left-pane">
+      <el-aside
+        :width="leftCollapsed ? '44px' : leftWidth + 'px'"
+        class="left-pane"
+        :class="{ resizing: isResizing }"
+      >
         <div class="pane-head">
           <span v-if="!leftCollapsed" class="pane-title">
             <span class="pt-bar" />
@@ -134,6 +138,15 @@
           <el-icon :size="16"><Folder /></el-icon>
         </div>
       </el-aside>
+
+      <!-- 目录树宽度拖拽手柄 -->
+      <div
+        v-if="!leftCollapsed"
+        class="pane-resizer"
+        :class="{ dragging: isResizing }"
+        :style="{ left: leftWidth + 'px' }"
+        @mousedown.prevent="startResize"
+      />
 
       <!-- Center -->
       <el-main class="center-pane">
@@ -213,7 +226,46 @@ const searchKeyword  = ref('')      // 全局搜索关键词
 const currentServerId = ref(serverStore.currentServerId)  // 当前选中的服务器 ID
 const currentTime    = ref('')      // 状态栏显示的当前时间
 
+// 左侧目录树宽度（可拖拽调整并持久化）
+const LS_LEFT_WIDTH  = 'goldapadmin.layout.leftWidth'
+const LEFT_MIN_WIDTH = 180
+const LEFT_MAX_WIDTH = 560
+const isResizing     = ref(false)
+const leftWidth      = ref(readLeftWidth())
+
 let timer: number | undefined  // 定时更新时间的定时器句柄
+
+/** 读取持久化的目录树宽度并限制在允许范围内 */
+function readLeftWidth(): number {
+  const raw = Number(localStorage.getItem(LS_LEFT_WIDTH))
+  if (!raw || Number.isNaN(raw)) return 260
+  return Math.min(LEFT_MAX_WIDTH, Math.max(LEFT_MIN_WIDTH, raw))
+}
+
+/** 开始拖拽调整目录树宽度，拖动结束后持久化 */
+function startResize(e: MouseEvent) {
+  isResizing.value = true
+  const startX = e.clientX
+  const startWidth = leftWidth.value
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+
+  function onMove(ev: MouseEvent) {
+    const next = startWidth + (ev.clientX - startX)
+    leftWidth.value = Math.min(LEFT_MAX_WIDTH, Math.max(LEFT_MIN_WIDTH, next))
+  }
+  function onEnd() {
+    isResizing.value = false
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onEnd)
+    localStorage.setItem(LS_LEFT_WIDTH, String(leftWidth.value))
+  }
+
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onEnd)
+}
 
 /** 从用户 DN 中提取简短的用户名用于显示 */
 const shortUserName = computed(() => {
@@ -521,6 +573,39 @@ async function handleCommand(cmd: string) {
     min-height: 0;
     display: flex; align-items: center; justify-content: center;
     color: var(--text-muted);
+  }
+
+  /* 拖拽调整宽度时关闭过渡，避免跟随滞后 */
+  &.resizing { transition: none; }
+}
+
+/* 目录树宽度拖拽手柄 */
+.pane-resizer {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 8px;
+  margin-left: -4px;
+  cursor: col-resize;
+  z-index: 20;
+  background: transparent;
+  transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1), background 0.15s ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 3.5px;
+    width: 1px;
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+
+  &:hover::after { background: var(--accent-primary); }
+
+  &.dragging {
+    transition: none;
+    background: var(--accent-primary-soft);
+    &::after { background: var(--accent-primary); }
   }
 }
 

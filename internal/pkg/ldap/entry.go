@@ -101,8 +101,9 @@ func (s *EntryService) GetChildren(conn *ldap.Conn, baseDN string) ([]model.Tree
 		return nil, err
 	}
 
-	// 构建：所有 DN set + 直接子节点列表（排除 baseDN 自身）
+	// 构建：所有 DN set + 直接子节点列表 + parent→直接子条目数
 	allDNs := make(map[string]struct{}, len(subtreeResult.Entries))
+	parentCount := make(map[string]int, len(subtreeResult.Entries))
 	var directChildren []*ldap.Entry
 	for _, e := range subtreeResult.Entries {
 		if strings.EqualFold(e.DN, baseDN) {
@@ -113,6 +114,7 @@ func (s *EntryService) GetChildren(conn *ldap.Conn, baseDN string) ([]model.Tree
 		// 计算 parentDN = 去掉 rdn 后的剩余部分
 		rdn := getRDN(e.DN)
 		parentDN := strings.TrimPrefix(e.DN, rdn+",")
+		parentCount[parentDN]++
 		if strings.EqualFold(parentDN, baseDN) {
 			directChildren = append(directChildren, e)
 		}
@@ -148,6 +150,7 @@ func (s *EntryService) GetChildren(conn *ldap.Conn, baseDN string) ([]model.Tree
 			ObjectClasses: oc,
 			HasChildren:   hc,
 			IsLeaf:        !hc,
+			ChildCount:    parentCount[entry.DN],
 			EntryType:     entryType,
 			Disabled:      disabled,
 		})
@@ -347,6 +350,7 @@ func (s *EntryService) GetTree(conn *ldap.Conn, baseDN string) ([]model.TreeNode
 			sub := build(kid.DN)
 			kid.HasChildren = len(sub) > 0
 			kid.IsLeaf = !kid.HasChildren
+			kid.ChildCount = len(sub)
 			kid.Children = sub
 			out[i] = kid
 		}
